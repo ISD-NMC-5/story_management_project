@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đổi Tên File Trung → Việt</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/rename-file.css">
+</head>
+<body>
+    <div class="container rename-page">
+        <header class="card app-topbar rename-topbar">
+            <div class="app-topbar-main">
+                <div class="app-brand">
+                    <span class="app-icon" aria-hidden="true">🏷</span>
+                    <div>
+                        <h2>Đổi Tên File Trung → Việt</h2>
+                        <p class="muted rename-subtitle">Dịch và thêm tiếng Việt <strong>sau</strong> tên tiếng Trung · hỗ trợ .txt và .rar · không đụng nội dung file</p>
+                    </div>
+                </div>
+            </div>
+            <div class="app-topbar-tools">
+                <a href="index.html" class="btn btn-small btn-icon">← Workspace</a>
+                <button id="btn-theme-toggle" class="btn btn-theme" type="button" title="Đổi Light/Dark mode">🌙</button>
+            </div>
+        </header>
+
+        <main class="rename-layout">
+            <section class="card rename-panel">
+                <h3>1. Chọn file cần đổi tên</h3>
+                <p class="muted rename-tip"><strong>Khuyên dùng:</strong> bấm <em>Chọn thư mục</em> → đổi tên tại chỗ (giữ nguyên dữ liệu). Hoặc chọn nhiều file rồi tải ZIP đã đổi tên.</p>
+
+                <div class="rename-pick-row">
+                    <button type="button" id="btn-pick-folder" class="btn btn-primary">📁 Chọn thư mục (đổi tên tại chỗ)</button>
+                    <button type="button" id="btn-pick-files" class="btn btn-secondary">Chọn nhiều file .txt / .rar</button>
+                    <input type="file" id="input-rename-files" multiple accept=".txt,.rar,application/x-rar-compressed,application/vnd.rar" hidden>
+                </div>
+
+                <div id="rename-file-zone" class="drop-zone compact-drop-zone">
+                    <p>KÉO THẢ FILE .TXT / .RAR VÀO ĐÂY</p>
+                    <p id="rename-file-summary" class="muted">Chưa chọn file</p>
+                </div>
+
+                <div class="rename-options">
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="chk-skip-renamed" checked>
+                        <span>Bỏ qua file đã có tiếng Việt phía sau tên Trung</span>
+                    </label>
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="chk-only-chinese" checked>
+                        <span>Chỉ xử lý tên có chữ Hán</span>
+                    </label>
+                </div>
+
+                <div class="rename-actions-row">
+                    <button type="button" id="btn-preview-rename" class="btn btn-primary" disabled>Xem trước / Dịch tên</button>
+                    <button type="button" id="btn-apply-rename" class="btn btn-secondary" disabled>Đổi tên tại chỗ</button>
+                    <button type="button" id="btn-download-zip" class="btn btn-secondary" disabled>Tải ZIP (tên mới)</button>
+                    <button type="button" id="btn-copy-names" class="btn btn-secondary" disabled>📋 Copy danh sách</button>
+                    <button type="button" id="btn-clear-rename-list" class="btn btn-danger btn-small">Xóa danh sách</button>
+                </div>
+            </section>
+
+            <section class="card rename-panel">
+                <h3>2. Từ điển (ưu tiên trước khi dịch online)</h3>
+
+                <!-- Thêm từng từ -->
+                <div class="dict-input-row">
+                    <input id="dict-cn" type="text" placeholder="Tiếng Trung">
+                    <input id="dict-vi" type="text" placeholder="Tiếng Việt">
+                    <button type="button" id="btn-add-dict" class="btn btn-small btn-primary">Lưu từ</button>
+                </div>
+
+                <!-- Dán hàng loạt -->
+                <details class="dict-bulk-panel" open>
+                    <summary>📋 Nhập hàng loạt (dán danh sách)</summary>
+                    <p class="muted dict-bulk-hint">Mỗi dòng 1 cặp, phân tách bởi <code>Tab</code>, <code>|</code>, <code>→</code>, hoặc <code>=</code>. Ví dụ:<br>
+                        <code>修仙|Tu tiên</code> &nbsp; <code>武侠→Võ hiệp</code> &nbsp; <code>第一章&#9;Chương 1</code>
+                    </p>
+                    <textarea id="dict-bulk-input" rows="5" class="dict-bulk-textarea" placeholder="Dán danh sách từ ở đây, mỗi dòng: từ_trung | từ_việt&#10;修仙|Tu tiên&#10;武侠→Võ hiệp&#10;第一章&#9;Chương 1"></textarea>
+                    <div class="rename-actions-row">
+                        <button type="button" id="btn-bulk-add-dict" class="btn btn-small btn-primary">📥 Nhập hàng loạt</button>
+                        <button type="button" id="btn-bulk-clear" class="btn btn-small">Xóa ô</button>
+                        <span id="dict-bulk-status" class="muted dict-bulk-status"></span>
+                    </div>
+                </details>
+
+                <!-- Xuất / Nhập file JSON -->
+                <div class="rename-actions-row" style="margin-top: 0.5rem;">
+                    <button type="button" id="btn-export-dict" class="btn btn-small">📤 Xuất JSON</button>
+                    <input type="file" id="input-import-dict" accept=".json,application/json,.txt,text/plain" hidden>
+                    <button type="button" id="btn-import-dict" class="btn btn-small">📂 Nhập file</button>
+                    <button type="button" id="btn-clear-dict" class="btn btn-small btn-danger">🗑 Xóa toàn bộ</button>
+                </div>
+
+                <details class="dict-argos-panel">
+                    <summary>📘 Argos / LibreTranslate (zh → vi)</summary>
+                    <p class="muted">Offline: <code>argospm install translate-zh translate-vi</code> · hoặc LibreTranslate local.</p>
+                    <label for="dict-argos-url">URL API:</label>
+                    <input type="url" id="dict-argos-url" class="full-width" placeholder="https://libretranslate.com/translate">
+                    <div class="dict-source-row">
+                        <label class="checkbox-row"><input type="checkbox" id="chk-use-argos" checked> Argos/LibreTranslate</label>
+                        <label class="checkbox-row"><input type="checkbox" id="chk-use-mymemory" checked> MyMemory</label>
+                        <button type="button" id="btn-test-argos" class="btn btn-small">Thử dịch</button>
+                    </div>
+                </details>
+
+                <!-- Tìm kiếm & thống kê -->
+                <div class="dict-stats-row">
+                    <p class="muted">Từ điển: <strong id="dict-count">0</strong> mục</p>
+                    <input type="text" id="dict-search" class="dict-search-input" placeholder="🔍 Tìm từ Trung hoặc Việt...">
+                </div>
+                <div class="dict-table-wrap">
+                    <table class="dict-table">
+                        <thead><tr><th>#</th><th>Trung</th><th>Việt</th><th></th></tr></thead>
+                        <tbody id="dict-table-body"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="card rename-panel rename-preview-panel">
+                <div class="rename-preview-head">
+                    <h3>3. Xem trước đổi tên</h3>
+                    <p class="muted">Định dạng: <code>中文 Tên tiếng Việt.ext</code></p>
+                </div>
+                <p id="rename-mode-note" class="muted rename-mode-note">Chưa quét file.</p>
+                <div class="rename-stats">
+                    <span>Tổng: <strong id="rename-stat-total">0</strong></span>
+                    <span>Sẽ đổi: <strong id="rename-stat-change">0</strong></span>
+                    <span>Bỏ qua: <strong id="rename-stat-skip">0</strong></span>
+                </div>
+                <div class="rename-table-wrap">
+                    <table class="rename-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Tên cũ</th>
+                                <th>→</th>
+                                <th>Tên mới</th>
+                                <th>Nguồn</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rename-preview-body">
+                            <tr><td colspan="5" class="muted rename-empty">Chọn file rồi bấm Xem trước / Dịch tên.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/rename-file.js"></script>
+</body>
+</html>
