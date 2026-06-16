@@ -261,15 +261,13 @@
 
         const quickPasteInstant = document.getElementById('input-quick-paste-instant');
         if (quickPasteInstant) {
-            quickPasteInstant.addEventListener('paste', (e) => {
-                const text = e.clipboardData && e.clipboardData.getData('text/plain');
+            quickPasteInstant.addEventListener('input', (e) => {
+                const text = quickPasteInstant.value;
                 if (!text || !text.trim()) return;
-                
-                e.preventDefault();
                 
                 saveEditorToSelectedBlock();
                 
-                pushHistory('paste nhanh tức thì');
+                pushHistory('nhập nhanh tức thì');
                 const parsed = parseClipboardToBlocks(text);
                 if (parsed.length > 0) {
                     const startIndex = window.BlockSystem.blocks.length;
