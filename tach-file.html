@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tách File — Chia file .txt theo chương</title>
+    <meta name="description" content="Công cụ tách file txt thành nhiều file nhỏ theo regex chương, hồi, quyển. Hỗ trợ kéo thả và tải ZIP.">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/ghep-tach.css">
+</head>
+<body>
+    <div class="container ghep-tach-page">
+        <header class="card app-topbar ghep-tach-topbar">
+            <div class="app-topbar-main">
+                <div class="app-brand">
+                    <span class="app-icon" aria-hidden="true">✂️</span>
+                    <div>
+                        <h1 style="margin:0; font-size:1.1rem; font-weight:800;">Tách File</h1>
+                        <p class="muted ghep-tach-subtitle">Chọn 1 file .txt → tách thành nhiều file nhỏ theo chương / regex</p>
+                    </div>
+                </div>
+            </div>
+            <div class="app-topbar-tools">
+                <a href="index.html" class="btn btn-small btn-icon" data-tooltip="Quay về Không Gian Làm Việc">← Workspace</a>
+                <a href="ghep-truyen.html" class="btn btn-small btn-icon" data-tooltip="Ghép nhiều file thành 1">📎 Ghép truyện</a>
+                <button id="btn-theme-toggle" class="btn btn-theme" type="button" title="Đổi Light/Dark mode">🌙</button>
+            </div>
+        </header>
+
+        <main class="ghep-tach-layout">
+            <!-- Panel 1: Chọn file & cấu hình -->
+            <section class="card ghep-tach-panel">
+                <h3>📁 Chọn file để tách</h3>
+                <div id="split-drop-zone" class="ghep-tach-drop-zone">
+                    <p>KÉO THẢ 1 FILE .TXT VÀO ĐÂY</p>
+                    <p class="muted">Chọn file có nhiều chương để tách thành từng file riêng</p>
+                    <button type="button" id="btn-pick-file" class="btn btn-small btn-secondary">Chọn file</button>
+                    <input type="file" id="input-split-file" accept=".txt" style="display: none;">
+                </div>
+                <p id="split-file-summary" class="muted" style="margin-top: 0.5rem;">Chưa chọn file</p>
+
+                <div class="ghep-tach-config">
+                    <div class="ghep-tach-field">
+                        <label for="split-regex">Regex tách chương:</label>
+                        <input type="text" id="split-regex" value="^(Chương|Chapter|Hồi|Quyển)\s+\d+" placeholder="VD: ^Chương\s+\d+">
+                    </div>
+                    <div class="ghep-tach-field">
+                        <label for="split-prefix">Tiền tố tên file xuất:</label>
+                        <input type="text" id="split-prefix" value="" placeholder="Tự lấy từ tiêu đề chương">
+                    </div>
+                </div>
+
+                <div class="ghep-tach-actions">
+                    <button type="button" id="btn-split-preview" class="btn btn-primary btn-icon" disabled>
+                        <span class="ico">✂️</span> Tách & Xem trước
+                    </button>
+                    <button type="button" id="btn-split-download-all" class="btn btn-secondary btn-icon" disabled>
+                        <span class="ico">⬇</span> Tải tất cả (.txt riêng)
+                    </button>
+                    <button type="button" id="btn-split-download-zip" class="btn btn-icon" disabled>
+                        <span class="ico">📦</span> Tải ZIP
+                    </button>
+                    <button type="button" id="btn-clear-split" class="btn btn-danger btn-small">Xóa</button>
+                </div>
+            </section>
+
+            <!-- Panel 2: Kết quả tách -->
+            <section id="split-result-panel" class="card ghep-tach-result" style="display: none;">
+                <h3>📋 Kết quả tách chương</h3>
+                <div class="ghep-tach-result-info">
+                    <div class="ghep-tach-stat">
+                        <strong>Số chương tách được</strong>
+                        <span id="stat-chapter-count">0</span>
+                    </div>
+                    <div class="ghep-tach-stat">
+                        <strong>Tổng ký tự</strong>
+                        <span id="stat-split-chars">0</span>
+                    </div>
+                    <div class="ghep-tach-stat">
+                        <strong>Chương lớn nhất</strong>
+                        <span id="stat-max-chapter">0</span>
+                    </div>
+                    <div class="ghep-tach-stat">
+                        <strong>Chương nhỏ nhất</strong>
+                        <span id="stat-min-chapter">0</span>
+                    </div>
+                </div>
+
+                <div id="split-chapter-list" class="split-chapter-list"></div>
+
+                <!-- Xem nội dung chương đã chọn -->
+                <div id="split-chapter-detail" style="margin-top: 0.75rem; display: none;">
+                    <h3 id="split-chapter-detail-title" style="font-size: 0.92rem;">Nội dung chương</h3>
+                    <textarea id="split-chapter-detail-text" class="ghep-tach-preview-text" readonly></textarea>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/tach-file.js"></script>
+</body>
+</html>

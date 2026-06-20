@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghép Truyện — Gộp nhiều file .txt thành 1</title>
+    <meta name="description" content="Công cụ ghép nhiều file txt thành một file duy nhất, hỗ trợ kéo thả, sắp xếp thứ tự, đặt tên tùy ý.">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/ghep-tach.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <!-- Container cho thông báo trôi nổi (Floating logs) -->
+    <div id="floating-logs-container" class="floating-logs-container"></div>
+
+    <div class="container ghep-tach-page">
+        <header class="card app-topbar ghep-tach-topbar">
+            <div class="app-topbar-main">
+                <div class="app-brand">
+                    <span class="app-icon" aria-hidden="true">📎</span>
+                    <div>
+                        <h1 style="margin:0; font-size:1.1rem; font-weight:800;">Ghép Truyện</h1>
+                        <p class="muted ghep-tach-subtitle">Chọn nhiều file .txt/epub/erub → ghép thành 1 file · kéo thả sắp xếp · chọn lọc bằng checkbox</p>
+                    </div>
+                </div>
+            </div>
+            <div class="app-topbar-tools">
+                <a href="index.html" class="btn btn-small btn-icon" data-tooltip="Quay về Không Gian Làm Việc">← Workspace</a>
+                <a href="tach-file.html" class="btn btn-small btn-icon" data-tooltip="Tách file theo chương">✂ Tách file</a>
+                <button id="btn-theme-toggle" class="btn btn-theme" type="button" title="Đổi Light/Dark mode">🌙</button>
+            </div>
+        </header>
+
+        <main class="ghep-tach-layout">
+            <!-- Selector tab -->
+            <div class="card p-2" style="border: 1px solid var(--app-border); background: var(--app-surface); display: flex; flex-direction: row; gap: 0.5rem; padding: 0.5rem !important; margin-bottom: 0.25rem;">
+                <button id="btn-tab-merge" class="btn btn-primary" style="flex: 1; border-radius: 0.55rem; font-weight: bold; text-align: center;">📎 Ghép nhiều file thành 1</button>
+                <button id="btn-tab-epub2txt" class="btn" style="flex: 1; border-radius: 0.55rem; font-weight: bold; text-align: center; background: var(--app-soft); color: var(--app-text); border: 1px solid var(--app-border);">📚 Chuyển nhiều EPUB sang TXT</button>
+            </div>
+
+            <!-- Tab 1: Ghép file -->
+            <div id="container-tab-merge">
+                <!-- Panel 1: Chọn file -->
+                <section class="card ghep-tach-panel">
+                    <h3>📁 Chọn file hoặc thư mục để ghép</h3>
+                    <div id="merge-drop-zone" class="ghep-tach-drop-zone">
+                        <p>KÉO THẢ NHIỀU FILE HOẶC THƯ MỤC VÀO ĐÂY</p>
+                        <p class="muted">Hỗ trợ file .txt, .epub, .erub hoặc cả thư mục chứa các file này</p>
+                        <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.5rem;">
+                            <button type="button" id="btn-pick-files" class="btn btn-small btn-secondary">Chọn file</button>
+                            <button type="button" id="btn-pick-folder" class="btn btn-small btn-secondary">Chọn thư mục</button>
+                        </div>
+                        <input type="file" id="input-merge-files" multiple accept=".txt,.epub,.erub" style="display: none;">
+                        <input type="file" id="input-merge-folder" webkitdirectory directory multiple style="display: none;">
+                    </div>
+                    <p id="merge-file-summary" class="muted" style="margin-top: 0.5rem;">Chưa chọn file</p>
+
+                    <!-- Bộ lọc kích thước file (Tab Ghép file) -->
+                    <div class="size-filter-card card p-3 mb-2" style="border: 1px solid var(--app-border); background: var(--app-surface-soft, rgba(0,0,0,0.02)); border-radius: 0.75rem; margin-top: 0.5rem;">
+                        <div class="d-flex justify-content-between align-items-center mb-2" style="cursor: pointer;" id="btn-toggle-size-filter-merge">
+                            <strong style="font-size: 0.88rem; color: var(--app-text-strong);"><span aria-hidden="true">⚖️</span> Bộ lọc kích thước file</strong>
+                            <span id="indicator-size-filter-merge" style="font-size: 0.8rem; color: var(--app-muted);">Hiện ▼</span>
+                        </div>
+                        <div id="size-filter-content-merge" style="display: none;">
+                            <div id="size-ranges-container-merge" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <!-- Các phạm vi kích thước sẽ được thêm ở đây bằng JS -->
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                <button type="button" id="btn-add-range-merge" class="btn btn-small btn-secondary" style="font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 0.4rem;">[ + Thêm phạm vi ]</button>
+                                <button type="button" id="btn-apply-filter-merge" class="btn btn-small btn-primary" style="font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 0.4rem;">Áp dụng tích chọn</button>
+                                <button type="button" id="btn-clear-filter-merge" class="btn btn-small btn-danger" style="font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 0.4rem;">Tải lại tất cả</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="merge-file-list" class="ghep-tach-file-list"></div>
+
+                    <div class="ghep-tach-config">
+                        <div class="ghep-tach-field">
+                            <label for="merge-filename">Tên file ghép xuất:</label>
+                            <div class="input-group">
+                                <input type="text" id="merge-filename" value="tonghop" placeholder="Tự điền từ file đầu tiên">
+                                <span id="merge-ext-label">.txt</span>
+                            </div>
+                        </div>
+                        <div class="ghep-tach-field">
+                            <label for="merge-format">Định dạng file xuất:</label>
+                            <select id="merge-format">
+                                <option value="txt">File văn bản (.txt)</option>
+                                <option value="epub">Sách điện tử (.epub)</option>
+                                <option value="erub">Định dạng erub (.erub)</option>
+                            </select>
+                        </div>
+                        <div class="ghep-tach-field">
+                            <label for="merge-separator">Ký tự ngăn cách (chỉ áp dụng khi xuất .txt):</label>
+                            <select id="merge-separator">
+                                <option value="newline2">2 dòng trống (mặc định)</option>
+                                <option value="newline1">1 dòng trống</option>
+                                <option value="line">──────────────</option>
+                                <option value="none">Không ngăn cách</option>
+                            </select>
+                        </div>
+                        <div class="ghep-tach-field">
+                            <label>Thư mục lưu mặc định:</label>
+                            <div style="display: flex; gap: 0.25rem;">
+                                <button type="button" id="btn-pick-save-dir" class="btn btn-small btn-secondary" style="flex-shrink: 0; min-height: 40px;">Chọn nơi lưu</button>
+                                <div id="save-dir-path" class="form-control" style="font-size: 0.8rem; display: flex; align-items: center; background: var(--app-soft); border: 1px solid var(--app-border-strong); border-radius: 0.55rem; padding: 0.5rem 0.65rem; width: 100%; min-height: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-muted);">Tải về trình duyệt (mặc định)</div>
+                                <button type="button" id="btn-clear-save-dir" class="btn btn-small btn-danger" style="display: none; flex-shrink: 0; min-height: 40px;">Xóa</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ghep-tach-actions">
+                        <button type="button" id="btn-merge" class="btn btn-primary btn-icon" disabled>
+                            <span class="ico">📎</span> Ghép & Tải xuống
+                        </button>
+                        <button type="button" id="btn-preview-merge" class="btn btn-icon" disabled>
+                            <span class="ico">👁</span> Xem trước
+                        </button>
+                        <button type="button" id="btn-clear-files" class="btn btn-danger btn-small">Xóa danh sách</button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Tab 2: Chuyển EPUB sang TXT -->
+            <div id="container-tab-epub2txt" style="display: none;">
+                <section class="card ghep-tach-panel">
+                    <h3>📁 Chọn nhiều file EPUB để chuyển sang TXT</h3>
+                    <div id="epub-drop-zone" class="ghep-tach-drop-zone">
+                        <p>KÉO THẢ NHIỀU FILE EPUB HOẶC THƯ MỤC VÀO ĐÂY</p>
+                        <p class="muted">Hỗ trợ các file .epub hoặc cả thư mục chứa file .epub</p>
+                        <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.5rem;">
+                            <button type="button" id="btn-pick-epub" class="btn btn-small btn-secondary">Chọn file EPUB</button>
+                            <button type="button" id="btn-pick-epub-folder" class="btn btn-small btn-secondary">Chọn thư mục</button>
+                        </div>
+                        <input type="file" id="input-epub-files" multiple accept=".epub" style="display: none;">
+                        <input type="file" id="input-epub-folder" webkitdirectory directory multiple style="display: none;">
+                    </div>
+                    <p id="epub-file-summary" class="muted" style="margin-top: 0.5rem;">Chưa chọn file EPUB</p>
+
+                    <!-- Bộ lọc kích thước file (Tab Chuyển EPUB) -->
+                    <div class="size-filter-card card p-3 mb-2" style="border: 1px solid var(--app-border); background: var(--app-surface-soft, rgba(0,0,0,0.02)); border-radius: 0.75rem; margin-top: 0.5rem;">
+                        <div class="d-flex justify-content-between align-items-center mb-2" style="cursor: pointer;" id="btn-toggle-size-filter-epub">
+                            <strong style="font-size: 0.88rem; color: var(--app-text-strong);"><span aria-hidden="true">⚖️</span> Bộ lọc kích thước file</strong>
+                            <span id="indicator-size-filter-epub" style="font-size: 0.8rem; color: var(--app-muted);">Hiện ▼</span>
+                        </div>
+                        <div id="size-filter-content-epub" style="display: none;">
+                            <div id="size-ranges-container-epub" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <!-- Các phạm vi kích thước sẽ được thêm ở đây bằng JS -->
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+                                <button type="button" id="btn-add-range-epub" class="btn btn-small btn-secondary" style="font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 0.4rem;">[ + Thêm phạm vi ]</button>
+                                <button type="button" id="btn-apply-filter-epub" class="btn btn-small btn-primary" style="font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 0.4rem;">Áp dụng tích chọn</button>
+                                <button type="button" id="btn-clear-filter-epub" class="btn btn-small btn-danger" style="font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 0.4rem;">Tải lại tất cả</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="epub-file-list" class="ghep-tach-file-list"></div>
+
+                    <div class="ghep-tach-config">
+                        <div class="ghep-tach-field">
+                            <label for="epub-export-mode">Chế độ xuất:</label>
+                            <select id="epub-export-mode">
+                                <option value="individual">Mỗi file EPUB ra 1 file TXT cùng tên (Mặc định)</option>
+                                <option value="merged">Gộp tất cả thành 1 file TXT lớn</option>
+                            </select>
+                        </div>
+                        <div class="ghep-tach-field" id="field-epub-merged-name" style="display: none;">
+                            <label for="epub-merged-filename">Tên file gộp xuất:</label>
+                            <div class="input-group">
+                                <input type="text" id="epub-merged-filename" value="epub_tonghop">
+                                <span>.txt</span>
+                            </div>
+                        </div>
+                        <div class="ghep-tach-field">
+                            <label>Tùy chọn nâng cao:</label>
+                            <div style="display: flex; flex-direction: column; gap: 0.4rem; padding: 0.5rem 0; font-size: 0.85rem;">
+                                <label class="checkbox-row" style="cursor: pointer;">
+                                    <input type="checkbox" id="chk-epub-keep-chapter-name" checked>
+                                    <span>Giữ tên chương</span>
+                                </label>
+                                <label class="checkbox-row" style="cursor: pointer;">
+                                    <input type="checkbox" id="chk-epub-add-paragraph-space" checked>
+                                    <span>Tự thêm khoảng trắng giữa các đoạn</span>
+                                </label>
+                                <label class="checkbox-row" style="cursor: pointer;">
+                                    <input type="checkbox" id="chk-epub-remove-blank-lines" checked>
+                                    <span>Xóa dòng trống thừa</span>
+                                </label>
+                                <label class="checkbox-row" style="cursor: pointer;">
+                                    <input type="checkbox" id="chk-epub-t2s">
+                                    <span>Chuyển Traditional Chinese → Simplified Chinese</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="ghep-tach-field">
+                            <label>Thư mục lưu mặc định:</label>
+                            <div style="display: flex; gap: 0.25rem;">
+                                <button type="button" id="btn-epub-pick-save-dir" class="btn btn-small btn-secondary" style="flex-shrink: 0; min-height: 40px;">Chọn nơi lưu</button>
+                                <div id="epub-save-dir-path" class="form-control" style="font-size: 0.8rem; display: flex; align-items: center; background: var(--app-soft); border: 1px solid var(--app-border-strong); border-radius: 0.55rem; padding: 0.5rem 0.65rem; width: 100%; min-height: 40px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--app-muted);">Tải về trình duyệt (mặc định)</div>
+                                <button type="button" id="btn-epub-clear-save-dir" class="btn btn-small btn-danger" style="display: none; flex-shrink: 0; min-height: 40px;">Xóa</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ghep-tach-actions">
+                        <button type="button" id="btn-epub-start-convert" class="btn btn-primary btn-icon" disabled>
+                            <span class="ico">📤</span> Chuyển đổi & Xuất TXT
+                        </button>
+                        <button type="button" id="btn-epub-clear-list" class="btn btn-danger btn-small">Xóa danh sách</button>
+                    </div>
+                </section>
+
+                <section class="card ghep-tach-panel mt-3" id="epub-progress-panel">
+                    <h3>📊 Tiến trình xử lý</h3>
+                    <div id="epub-progress-bar-container" class="progress mb-2" style="height: 10px; background: var(--app-soft); border-radius: 0.3rem; overflow: hidden;">
+                        <div id="epub-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%; height: 100%; background: var(--app-primary); transition: width 0.2s ease;"></div>
+                    </div>
+                    <textarea id="epub-console-log" class="ghep-tach-preview-text" readonly placeholder="Thông tin tiến trình sẽ được hiển thị ở đây..." style="min-height: 200px; background-color: #0f172a; color: #38bdf8; font-family: Consolas, monospace; font-size: 0.85rem; border-color: #1e293b;"></textarea>
+                </section>
+            </div>
+
+
+            <!-- Panel: Giới hạn hệ thống -->
+            <section class="card ghep-tach-panel">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <h3 style="margin: 0;">📊 Giới hạn hệ thống & So sánh</h3>
+                    <button type="button" id="btn-refresh-limits" class="btn btn-small btn-secondary">Đo lại</button>
+                </div>
+                <div id="system-limits-info" class="system-limits-grid">
+                    <p class="muted">Đang đo giới hạn trên máy bạn...</p>
+                </div>
+            </section>
+
+            <!-- Panel 2: Kết quả / Xem trước -->
+            <section id="merge-result-panel" class="card ghep-tach-result" style="display: none;">
+                <h3>📋 Xem trước nội dung ghép</h3>
+                <div class="ghep-tach-result-info">
+                    <div class="ghep-tach-stat">
+                        <strong>Số file đã tích</strong>
+                        <span id="stat-file-count">0</span>
+                    </div>
+                    <div class="ghep-tach-stat">
+                        <strong>Tổng ký tự</strong>
+                        <span id="stat-total-chars">0</span>
+                    </div>
+                    <div class="ghep-tach-stat">
+                        <strong>Dung lượng</strong>
+                        <span id="stat-total-size">0</span>
+                    </div>
+                </div>
+                <textarea id="merge-preview-text" class="ghep-tach-preview-text" readonly placeholder="Nội dung ghép sẽ hiển thị ở đây..."></textarea>
+            </section>
+        </main>
+    </div>
+
+    <script src="js/utils.js"></script>
+    <script src="js/theme.js"></script>
+    <script src="js/ghep-truyen.js"></script>
+</body>
+</html>

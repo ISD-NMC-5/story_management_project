@@ -1,0 +1,495 @@
+/* ── ghep-tach.css — CSS riêng cho trang Ghép Truyện & Tách File ── */
+
+.ghep-tach-page {
+    max-width: 960px;
+}
+
+.ghep-tach-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ghep-tach-subtitle {
+    margin: 0;
+    font-size: 0.82rem;
+}
+
+.ghep-tach-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
+.ghep-tach-panel {
+    padding: 1rem 1.15rem;
+}
+
+.ghep-tach-panel h3 {
+    margin: 0 0 0.75rem;
+    color: var(--app-text-strong);
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+/* ── Drop zone riêng ── */
+.ghep-tach-drop-zone {
+    border: 2px dashed var(--app-border-strong);
+    border-radius: 0.75rem;
+    padding: 1.25rem 1rem;
+    text-align: center;
+    background: var(--app-surface);
+    color: var(--app-muted);
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+    cursor: pointer;
+}
+
+.ghep-tach-drop-zone:hover {
+    border-color: var(--app-primary);
+    background: var(--app-primary-soft);
+}
+
+.ghep-tach-drop-zone.dragover {
+    border-color: var(--app-primary);
+    background: var(--app-primary-soft);
+    color: var(--app-primary);
+    transform: scale(1.01);
+}
+
+.ghep-tach-drop-zone p {
+    margin: 0 0 0.35rem;
+    font-weight: 700;
+}
+
+.ghep-tach-drop-zone .muted {
+    font-size: 0.82rem;
+}
+
+/* ── File list ── */
+.ghep-tach-file-list {
+    display: flex;
+    max-height: 260px;
+    flex-direction: column;
+    gap: 0.4rem;
+    overflow-y: auto;
+    margin-top: 0.65rem;
+}
+
+.ghep-tach-file-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--app-border);
+    border-radius: 0.55rem;
+    background: var(--app-surface);
+    font-size: 0.82rem;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ghep-tach-file-row:hover {
+    border-color: var(--app-primary);
+    background: var(--app-primary-soft);
+}
+
+.ghep-tach-file-row .file-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.ghep-tach-file-row .file-size {
+    color: var(--app-muted);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+}
+
+.ghep-tach-file-row .btn-delete {
+    border: 0;
+    border-radius: 0.4rem;
+    background: var(--app-danger);
+    color: #fff;
+    font-weight: 800;
+    padding: 0.15rem 0.45rem;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.ghep-tach-file-row .btn-delete:hover {
+    opacity: 0.8;
+}
+
+/* ── Actions row ── */
+.ghep-tach-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+/* ── Config fields ── */
+.ghep-tach-config {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.65rem;
+    margin-top: 0.75rem;
+}
+
+.ghep-tach-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.ghep-tach-field label {
+    margin: 0;
+    color: var(--app-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.ghep-tach-field input,
+.ghep-tach-field select {
+    width: 100%;
+    min-height: 40px;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--app-border-strong);
+    border-radius: 0.55rem;
+    background-color: var(--app-input-bg);
+    color: var(--app-text);
+    font-size: 0.9rem;
+}
+
+/* ── Result / Preview panel ── */
+.ghep-tach-result {
+    padding: 1rem 1.15rem;
+    border-top: 3px solid var(--app-primary);
+}
+
+.ghep-tach-result h3 {
+    margin: 0 0 0.65rem;
+    color: var(--app-text-strong);
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.ghep-tach-result-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.55rem;
+    margin-bottom: 0.75rem;
+}
+
+.ghep-tach-stat {
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--app-border);
+    border-radius: 0.55rem;
+    background: var(--app-soft);
+}
+
+.ghep-tach-stat strong {
+    display: block;
+    margin-bottom: 0.15rem;
+    color: var(--app-text-strong);
+    font-size: 0.88rem;
+}
+
+.ghep-tach-stat span {
+    color: var(--app-primary);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.ghep-tach-preview-text {
+    width: 100%;
+    min-height: 200px;
+    max-height: 400px;
+    padding: 0.75rem;
+    border: 1px solid var(--app-border-strong);
+    border-radius: 0.55rem;
+    background-color: var(--app-input-bg);
+    color: var(--app-text);
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    resize: vertical;
+}
+
+/* ── Split preview list ── */
+.split-chapter-list {
+    display: flex;
+    max-height: 400px;
+    flex-direction: column;
+    gap: 0.45rem;
+    overflow-y: auto;
+}
+
+.split-chapter-item {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--app-border);
+    border-radius: 0.55rem;
+    background: var(--app-soft);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.split-chapter-item:hover {
+    border-color: var(--app-primary);
+    background: var(--app-primary-soft);
+}
+
+.split-chapter-item.selected {
+    border-color: var(--app-primary);
+    background: var(--app-primary-soft);
+    box-shadow: inset 4px 0 0 var(--app-primary);
+}
+
+.split-chapter-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.split-chapter-head strong {
+    color: var(--app-text-strong);
+    font-size: 0.88rem;
+}
+
+.split-chapter-head small {
+    color: var(--app-muted);
+    font-size: 0.75rem;
+}
+
+.split-chapter-preview {
+    margin: 0;
+    color: var(--app-muted);
+    font-size: 0.78rem;
+    line-height: 1.4;
+    max-height: 2.8em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ── Summary badge ── */
+.ghep-tach-summary {
+    margin: 0.65rem 0 0;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.55rem;
+    background: var(--app-accent-soft);
+    border: 1px solid var(--app-accent);
+    font-size: 0.85rem;
+    color: var(--app-text);
+}
+
+/* ── Responsive ── */
+@media (max-width: 767px) {
+    .ghep-tach-page {
+        width: min(100% - 12px, 100%);
+        margin: 6px auto;
+    }
+
+    .ghep-tach-config {
+        grid-template-columns: 1fr;
+    }
+
+    .ghep-tach-result-info {
+        grid-template-columns: 1fr;
+    }
+
+    .ghep-tach-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 480px) {
+    .ghep-tach-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Checkbox và trạng thái bỏ tích */
+.ghep-tach-file-row-left {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.ghep-tach-file-row .file-checkbox {
+    width: 1rem;
+    height: 1rem;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.ghep-tach-file-row.file-unchecked {
+    opacity: 0.5;
+    background: var(--app-soft);
+    border-style: dashed;
+}
+
+.ghep-tach-file-row.file-unchecked:hover {
+    opacity: 0.75;
+}
+
+.ghep-tach-file-row.file-unchecked .file-name {
+    text-decoration: line-through;
+}
+
+/* Container cho thông báo trôi nổi */
+.floating-logs-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1100;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 380px;
+    width: calc(100% - 40px);
+    pointer-events: none;
+}
+
+/* Item thông báo trôi nổi */
+.floating-log-item {
+    position: relative;
+    background: var(--app-card-bg, #ffffff);
+    color: var(--app-text, #333333);
+    border-left: 5px solid var(--app-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    pointer-events: auto;
+    animation: slideIn 0.3s ease forwards;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Thể hiện thanh đếm thời gian hoặc hiệu ứng còn lại */
+.floating-log-item::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: rgba(0, 0, 0, 0.1);
+    width: 100%;
+    animation: shrinkBar 20s linear forwards;
+}
+
+@keyframes shrinkBar {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+
+.floating-log-item.log-info { border-left-color: var(--app-primary, #007bff); }
+.floating-log-item.log-success { border-left-color: #28a745; }
+.floating-log-item.log-warning { border-left-color: #ffc107; }
+.floating-log-item.log-error { border-left-color: #dc3545; }
+
+.floating-log-item .btn-close-log {
+    background: transparent;
+    border: none;
+    color: var(--app-muted);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    font-weight: bold;
+}
+
+.floating-log-item .btn-close-log:hover {
+    color: var(--app-text-strong);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.floating-log-item.fade-out {
+    opacity: 0;
+    transform: translateX(100px) scale(0.9);
+}
+
+/* ── Size Filter specific styles ── */
+.size-filter-card {
+    transition: all 0.2s ease;
+}
+.size-range-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--app-soft);
+    border: 1px solid var(--app-border);
+    border-radius: 0.5rem;
+    font-size: 0.82rem;
+}
+.size-range-label {
+    font-weight: 700;
+    color: var(--app-text-strong);
+    min-width: 80px;
+}
+.size-range-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.size-range-inputs span {
+    color: var(--app-muted);
+}
+.size-range-inputs input {
+    width: 80px;
+    height: 32px;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--app-border-strong);
+    border-radius: 0.4rem;
+    background: var(--app-input-bg);
+    color: var(--app-text);
+    text-align: center;
+    font-size: 0.85rem;
+}
+.size-range-inputs select {
+    width: 65px;
+    height: 32px;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid var(--app-border-strong);
+    border-radius: 0.4rem;
+    background: var(--app-input-bg);
+    color: var(--app-text);
+    font-size: 0.85rem;
+}
+.size-range-row .btn-delete-range {
+    background: var(--app-danger);
+    color: white;
+    border: none;
+    border-radius: 0.4rem;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: auto;
+}
+.size-range-row .btn-delete-range:hover {
+    opacity: 0.8;
+}
+

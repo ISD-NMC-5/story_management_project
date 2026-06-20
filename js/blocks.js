@@ -261,8 +261,7 @@
 
         const quickPasteInstant = document.getElementById('input-quick-paste-instant');
         if (quickPasteInstant) {
-            quickPasteInstant.addEventListener('input', (e) => {
-                const text = quickPasteInstant.value;
+            const processQuickPaste = (text) => {
                 if (!text || !text.trim()) return;
                 
                 saveEditorToSelectedBlock();
@@ -291,8 +290,33 @@
                 }
                 
                 quickPasteInstant.value = '';
-                quickPasteInstant.blur();
-                setTimeout(() => quickPasteInstant.focus(), 50);
+            };
+
+            // Sự kiện paste: Xử lý nội dung dán ngay lập tức
+            quickPasteInstant.addEventListener('paste', (e) => {
+                const pastedText = (e.clipboardData || window.clipboardData)?.getData('text');
+                if (pastedText) {
+                    e.preventDefault();
+                    processQuickPaste(pastedText);
+                } else {
+                    setTimeout(() => {
+                        processQuickPaste(quickPasteInstant.value);
+                    }, 50);
+                }
+            });
+
+            // Sự kiện keydown: Nhấn Enter khi viết/gõ tay để tạo block
+            quickPasteInstant.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    processQuickPaste(quickPasteInstant.value);
+                    quickPasteInstant.blur();
+                }
+            });
+
+            // Sự kiện blur: Tự động lưu/tạo block khi nhấn ra ngoài
+            quickPasteInstant.addEventListener('blur', () => {
+                processQuickPaste(quickPasteInstant.value);
             });
         }
         btnAddBlock.addEventListener('click', () => addBlock());
