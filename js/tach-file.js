@@ -116,23 +116,18 @@
             return;
         }
 
-        const regexEl = document.getElementById('split-regex');
-        let regex;
-        try {
-            regex = new RegExp(
-                (regexEl && regexEl.value.trim()) || '^(Chương|Chapter|Hồi|Quyển)\\s+\\d+',
-                'i'
-            );
-        } catch (error) {
-            showToast('Regex tách chương không hợp lệ.', 'error');
-            return;
-        }
+        const limitEl = document.getElementById('split-word-limit');
+        const wordLimit = parseInt(limitEl ? limitEl.value : '50000', 10) || 50000;
+
+        const keywordsEl = document.getElementById('split-keywords');
+        const keywordsStr = keywordsEl ? keywordsEl.value : 'Chương, Chap, Chapter, 第, 卷, Quyển';
+        const keywords = keywordsStr.split(',').map(k => k.trim()).filter(Boolean);
 
         const text = await selectedFile.text();
-        splitChapters = splitTextToChapters(text, regex);
+        splitChapters = splitTextToChapters(text, wordLimit, keywords);
 
         if (splitChapters.length === 0) {
-            showToast('Không tìm thấy chương nào với regex đã cho.', 'warning');
+            showToast('Không tìm thấy nội dung để tách.', 'warning');
             return;
         }
 
@@ -144,38 +139,85 @@
 
         updateSplitStats();
         renderChapterList();
-        showToast(`Đã tách thành ${splitChapters.length} chương.`, 'success');
+        showToast(`Đã tách thành ${splitChapters.length} phần.`, 'success');
     }
 
-    function splitTextToChapters(text, regex) {
-        const lines = String(text || '').split(/\r?\n/);
+    function findChapterTitle(textSegment, keywords) {
+        const lines = textSegment.split(/\r?\n/);
+        const escapedKeywords = keywords.map(kw => kw.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')).filter(Boolean);
+        if (escapedKeywords.length === 0) return null;
+        
+        const pattern = new RegExp('^\\s*(?:' + escapedKeywords.join('|') + ')', 'i');
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (pattern.test(line)) {
+                let fullTitle = line;
+                if (line.length < 30) {
+                    for (let j = i + 1; j < Math.min(lines.length, i + 3); j++) {
+                        const nextLine = lines[j].trim();
+                        if (nextLine) {
+                            if (!pattern.test(nextLine) && nextLine.length < 60) {
+                                fullTitle = line + ' ' + nextLine;
+                            }
+                            break;
+                        }
+                    }
+                }
+                return fullTitle;
+            }
+        }
+        return null;
+    }
+
+    function splitTextToChapters(text, targetWordLimit, keywords) {
+        const tokens = text.match(/\S+|\s+/g) || [];
         const chapters = [];
-        let currentTitle = 'Phần mở đầu';
-        let currentLines = [];
+        let currentTokens = [];
+        let currentWordCount = 0;
+        const sentenceEndings = new Set(['.', '!', '?', '。', '！', '？']);
 
         const flush = () => {
-            const content = currentLines.join('\n').trim();
-            if (!content && chapters.length === 0) return;
+            const content = currentTokens.join('');
+            if (!content.trim()) return;
+            const title = findChapterTitle(content, keywords);
             chapters.push({
-                title: currentTitle || `Phần ${chapters.length + 1}`,
-                content
+                title: title || '',
+                content: content
             });
+            currentTokens = [];
+            currentWordCount = 0;
         };
 
-        for (const line of lines) {
-            const trimmed = line.trim();
-            regex.lastIndex = 0;
-            if (regex.test(trimmed)) {
-                if (currentLines.length > 0 || chapters.length > 0) flush();
-                currentTitle = trimmed || `Phần ${chapters.length + 1}`;
-                currentLines = [];
-            } else {
-                currentLines.push(line);
+        for (let i = 0; i < tokens.length; i++) {
+            const token = tokens[i];
+            currentTokens.push(token);
+
+            if (isCountableWord(token)) {
+                currentWordCount++;
+
+                if (currentWordCount >= targetWordLimit) {
+                    const lastChar = token.slice(-1);
+                    if (sentenceEndings.has(lastChar) || currentWordCount >= targetWordLimit * 1.5) {
+                        if (i + 1 < tokens.length && /^\s+$/.test(tokens[i + 1])) {
+                            currentTokens.push(tokens[i + 1]);
+                            i++;
+                        }
+                        flush();
+                    }
+                }
             }
         }
 
-        if (currentLines.length > 0 || chapters.length === 0) flush();
-        return chapters.length ? chapters : [{ title: 'Toàn bộ', content: text }];
+        if (currentTokens.length > 0) {
+            flush();
+        }
+
+        return chapters;
+    }
+
+    function isCountableWord(value) {
+        return /[\p{L}\p{N}]/u.test(String(value || ''));
     }
 
     // ─── Render ───────────────────────────────────────────
@@ -205,10 +247,11 @@
 
         listEl.innerHTML = splitChapters.map((ch, i) => {
             const preview = ch.content.substring(0, 120).replace(/\n/g, ' ');
+            const title = ch.title || `Phần ${i + 1} (Không tìm thấy chương)`;
             return `
                 <div class="split-chapter-item${i === selectedChapterIndex ? ' selected' : ''}" data-chapter-index="${i}">
                     <div class="split-chapter-head">
-                        <strong>${escapeHtml(ch.title)}</strong>
+                        <strong>${escapeHtml(title)}</strong>
                         <small>${formatBytes(ch.content.length)} · #${i + 1}</small>
                     </div>
                     <p class="split-chapter-preview">${escapeHtml(preview)}...</p>
@@ -239,7 +282,7 @@
         const textEl = document.getElementById('split-chapter-detail-text');
 
         if (detailEl) detailEl.style.display = '';
-        if (titleEl) titleEl.textContent = `📖 ${ch.title} (${formatBytes(ch.content.length)})`;
+        if (titleEl) titleEl.textContent = `📖 ${ch.title || `Phần ${index + 1}`} (${formatBytes(ch.content.length)})`;
         if (textEl) textEl.value = ch.content;
     }
 
@@ -249,10 +292,13 @@
         const prefixEl = document.getElementById('split-prefix');
         const prefix = (prefixEl && prefixEl.value.trim()) || '';
 
-        if (prefix) {
-            return sanitizeFilename(`${prefix}_${String(index + 1).padStart(4, '0')}_${chapter.title}`) + '.txt';
+        let name = '';
+        if (chapter.title) {
+            name = prefix + chapter.title;
+        } else {
+            name = prefix + `Part_${String(index + 1).padStart(3, '0')}`;
         }
-        return sanitizeFilename(chapter.title || `Phan_${index + 1}`) + '.txt';
+        return sanitizeFilename(name) + '.txt';
     }
 
     function sanitizeFilename(name) {

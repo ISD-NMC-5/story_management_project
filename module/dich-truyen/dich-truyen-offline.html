@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dịch truyện Trung - Việt Offline</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="hero">
+        <div>
+          <h1>📖 Dịch truyện TXT Trung → Việt</h1>
+          <p>
+            Chạy hoàn toàn offline, dùng từ điển cá nhân, chỉ lấy một nghĩa đầu
+            tiên, ưu tiên cụm dài và tự động chống dính từ tiếng Việt.
+          </p>
+        </div>
+        <div class="offline">● Offline</div>
+      </header>
+
+      <main class="layout">
+        <aside class="sidebar">
+          <section class="panel">
+            <div class="panel-head"><h2>1. Tệp truyện</h2></div>
+            <div class="panel-body">
+              <label id="storyDrop" class="drop" for="storyInput">
+                <input
+                  id="storyInput"
+                  type="file"
+                  accept=".txt,text/plain"
+                  multiple
+                />
+                <div class="drop-icon">📥</div>
+                <div class="drop-title">Chọn hoặc kéo thả truyện TXT</div>
+                <div class="drop-help">
+                  Có thể chọn nhiều tệp. Chỉ những truyện được tick mới được dịch.
+                </div>
+              </label>
+              <div class="story-actions">
+                <button id="selectAllStoriesButton" class="btn light" type="button">
+                  Chọn tất cả
+                </button>
+                <button id="clearStorySelectionButton" class="btn light" type="button">
+                  Bỏ chọn tất
+                </button>
+              </div>
+              <div id="storyList" class="story-list"></div>
+              <div id="storyInfo" class="info">
+                <div class="info-row">
+                  <span>Tên tệp</span><strong id="storyName">—</strong>
+                </div>
+                <div class="info-row">
+                  <span>Dung lượng</span><strong id="storySize">—</strong>
+                </div>
+                <div class="info-row">
+                  <span>Số dòng</span><strong id="storyLines">—</strong>
+                </div>
+                <div class="info-row">
+                  <span>Số khối</span><strong id="storyChunks">—</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>2. Bộ từ điển</h2></div>
+            <div class="panel-body">
+              <input
+                id="dictInput"
+                class="hidden"
+                type="file"
+                accept=".txt,text/plain"
+                multiple
+              />
+              <div class="btn-row">
+                <button id="chooseDictButton" class="btn primary" type="button">
+                  📚 Chọn các từ điển
+                </button>
+                <button id="clearDictButton" class="btn light" type="button">
+                  Xóa tất cả
+                </button>
+              </div>
+              <div class="help">
+                Chọn đồng thời: ChinesePhienAmWords.txt, VietPhrase.txt,
+                Pronouns.txt, Names.txt và LuatNhan.txt.
+              </div>
+              <div id="dictSummary" class="dict-summary">Chưa có từ điển.</div>
+              <div id="dictList" class="dict-list">
+                <div class="dict-empty">
+                  Tệp ở dưới có ưu tiên cao hơn. Mỗi mục từ chỉ giữ nghĩa đầu
+                  tiên trước dấu “/”.
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>3. Thiết lập</h2></div>
+            <div class="panel-body">
+              <div class="field">
+                <label for="chunkSize">Kích thước khối</label>
+                <select id="chunkSize">
+                  <option value="262144">256 KB</option>
+                  <option value="524288" selected>512 KB</option>
+                  <option value="1048576">1 MB</option>
+                  <option value="2097152">2 MB</option>
+                </select>
+              </div>
+              <label class="check"
+                ><input id="applyRules" type="checkbox" checked /><span
+                  >Áp dụng LuatNhan có biến <code>{0}</code></span
+                ></label
+              >
+              <label class="check"
+                ><input id="chapterRegex" type="checkbox" checked /><span
+                  >Đổi 第123章 thành Chương 123</span
+                ></label
+              >
+              <label class="check"
+                ><input
+                  id="normalizePunctuation"
+                  type="checkbox"
+                  checked
+                /><span>Chuẩn hóa dấu câu Trung Quốc</span></label
+              >
+              <label class="check"
+                ><input id="keepUnknown" type="checkbox" checked /><span
+                  >Giữ chữ Trung chưa có trong từ điển</span
+                ></label
+              >
+              <label class="check"
+                ><input id="capitalizeSentences" type="checkbox" checked /><span
+                  >Viết hoa đầu câu sau khi dịch</span
+                ></label
+              >
+              <div class="notice">
+                <strong>Quy tắc cố định:</strong> hệ thống luôn chỉ lấy một
+                nghĩa đầu tiên. Ví dụ <code>突然=bỗng nhiên/đột nhiên</code> chỉ
+                dùng <code>bỗng nhiên</code>.
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>4. Xuất kết quả</h2></div>
+            <div class="panel-body">
+              <div class="field">
+                <label for="exportName">Tên tệp xuất</label>
+                <input id="exportName" type="text" value="truyen-viet.txt" />
+              </div>
+              <div class="btn-row">
+                <button
+                  id="exportButton"
+                  class="btn success"
+                  type="button"
+                  disabled
+                >
+                  ⬇ Xuất các truyện đã chọn
+                </button>
+                <button
+                  id="exportClearButton"
+                  class="btn warning"
+                  type="button"
+                  disabled
+                >
+                  Xuất và xóa tạm
+                </button>
+              </div>
+              <div class="storage">
+                <div class="storage-line">
+                  <span>Dung lượng trình duyệt</span
+                  ><strong id="storageText">Đang kiểm tra...</strong>
+                </div>
+                <div class="storage-track">
+                  <div id="storageBar" class="storage-bar"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>5. Dữ liệu</h2></div>
+            <div class="panel-body">
+              <button
+                id="deleteAllButton"
+                class="btn danger full"
+                type="button"
+              >
+                Xóa toàn bộ dữ liệu đã lưu
+              </button>
+            </div>
+          </section>
+        </aside>
+
+        <section class="main">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Tiến trình</h2>
+              <div class="btn-row">
+                <button
+                  id="startButton"
+                  class="btn primary"
+                  type="button"
+                  disabled
+                >
+                  ▶ Bắt đầu / Tiếp tục
+                </button>
+                <button
+                  id="pauseButton"
+                  class="btn warning"
+                  type="button"
+                  disabled
+                >
+                  ⏸ Tạm dừng
+                </button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="stats">
+                <div class="stat">
+                  <div class="stat-label">Tiến trình</div>
+                  <div id="progressValue" class="stat-value">0%</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-label">Đã dịch</div>
+                  <div id="translatedBytes" class="stat-value">0 B</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-label">Dòng đã xử lý</div>
+                  <div id="translatedLines" class="stat-value">0</div>
+                </div>
+                <div class="stat">
+                  <div class="stat-label">Mục từ đã nạp</div>
+                  <div id="dictionaryEntries" class="stat-value">0</div>
+                </div>
+              </div>
+              <div class="progress-head">
+                <span id="progressStatus">Chưa có tác vụ</span
+                ><strong id="chunkStatus">0 / 0 khối</strong>
+              </div>
+              <div class="progress-track">
+                <div id="progressBar" class="progress-bar"></div>
+              </div>
+              <div id="statusBox" class="status">
+                <span>ℹ️</span>
+                <div>Chọn truyện và các từ điển để bắt đầu.</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Xem trước</h2></div>
+            <div class="toolbar">
+              <label for="jumpChunk">Khối:</label>
+              <input id="jumpChunk" type="number" min="1" value="1" />
+              <button id="jumpButton" class="btn light" type="button">
+                Đi tới
+              </button>
+              <button id="prevButton" class="btn light" type="button">
+                ← Trước
+              </button>
+              <button id="nextButton" class="btn light" type="button">
+                Sau →
+              </button>
+              <span id="previewPosition" class="position">Chưa có dữ liệu</span>
+            </div>
+            <div class="preview-grid">
+              <div class="preview-col">
+                <div class="preview-title">
+                  <span>Văn bản gốc</span><span id="sourceCount">0 ký tự</span>
+                </div>
+                <textarea
+                  id="sourcePreview"
+                  class="preview"
+                  readonly
+                  spellcheck="false"
+                ></textarea>
+              </div>
+              <div class="preview-col">
+                <div class="preview-title">
+                  <span>Bản dịch</span><span id="translatedCount">0 ký tự</span>
+                </div>
+                <textarea
+                  id="translatedPreview"
+                  class="preview translated"
+                  readonly
+                  spellcheck="false"
+                ></textarea>
+              </div>
+            </div>
+            <div class="analysis-panel">
+              <div class="preview-title">
+                <span>Dịch từng từ / cụm</span><span id="analysisCount">0 mục</span>
+              </div>
+              <div id="analysisList" class="analysis-list">
+                Chưa có dữ liệu phân tích.
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Nhật ký</h2>
+              <button id="clearLogButton" class="btn light" type="button">
+                Xóa hiển thị
+              </button>
+            </div>
+            <div class="panel-body"><div id="logBox" class="log"></div></div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -8,11 +8,18 @@
 
     let selectedFiles = []; // { id, name, size, text, checked, fileObj }
     let epubSelectedFiles = []; // { id, name, size, fileObj, checked }
+    let docxSelectedFiles = []; // { id, name, size, fileObj, checked }
+    let searchQuery = "";
+    let lastCheckedIndex = -1;
     let mergeSizeRanges = [
         { from: 0, fromUnit: 'KB', to: 100, toUnit: 'KB' },
         { from: 100, fromUnit: 'KB', to: 1, toUnit: 'GB' }
     ];
     let epubSizeRanges = [
+        { from: 0, fromUnit: 'KB', to: 100, toUnit: 'KB' },
+        { from: 100, fromUnit: 'KB', to: 1, toUnit: 'GB' }
+    ];
+    let docxSizeRanges = [
         { from: 0, fromUnit: 'KB', to: 100, toUnit: 'KB' },
         { from: 100, fromUnit: 'KB', to: 1, toUnit: 'GB' }
     ];
@@ -29,6 +36,7 @@
         const btnPickFiles = document.getElementById('btn-pick-files');
         const btnPickFolder = document.getElementById('btn-pick-folder');
         const btnMerge = document.getElementById('btn-merge');
+        const btnGroupMerge = document.getElementById('btn-group-merge');
         const btnPreview = document.getElementById('btn-preview-merge');
         const btnClear = document.getElementById('btn-clear-files');
         const filenameEl = document.getElementById('merge-filename');
@@ -43,40 +51,80 @@
         // Tab selection elements
         const btnTabMerge = document.getElementById('btn-tab-merge');
         const btnTabEpub2txt = document.getElementById('btn-tab-epub2txt');
+        const btnTabDocx2txt = document.getElementById('btn-tab-docx2txt');
         const containerTabMerge = document.getElementById('container-tab-merge');
         const containerTabEpub2txt = document.getElementById('container-tab-epub2txt');
+        const containerTabDocx2txt = document.getElementById('container-tab-docx2txt');
 
-        if (btnTabMerge && btnTabEpub2txt && containerTabMerge && containerTabEpub2txt) {
-            btnTabMerge.addEventListener('click', () => {
-                btnTabMerge.classList.add('btn-primary');
-                btnTabMerge.classList.remove('btn-secondary');
-                btnTabMerge.style.background = '';
-                btnTabMerge.style.color = '';
-                btnTabMerge.style.border = '';
-                
-                btnTabEpub2txt.classList.remove('btn-primary');
-                btnTabEpub2txt.style.background = 'var(--app-soft)';
-                btnTabEpub2txt.style.color = 'var(--app-text)';
-                btnTabEpub2txt.style.border = '1px solid var(--app-border)';
+        function selectTab(activeBtn, activeContainer) {
+            const tabs = [
+                { btn: btnTabMerge, container: containerTabMerge },
+                { btn: btnTabEpub2txt, container: containerTabEpub2txt },
+                { btn: btnTabDocx2txt, container: containerTabDocx2txt }
+            ];
 
-                containerTabMerge.style.display = '';
-                containerTabEpub2txt.style.display = 'none';
+            tabs.forEach(t => {
+                if (!t.btn || !t.container) return;
+                if (t.btn === activeBtn) {
+                    t.btn.classList.add('btn-primary');
+                    t.btn.style.background = '';
+                    t.btn.style.color = '';
+                    t.btn.style.border = '';
+                    t.container.style.display = '';
+                } else {
+                    t.btn.classList.remove('btn-primary');
+                    t.btn.style.background = 'var(--app-soft)';
+                    t.btn.style.color = 'var(--app-text)';
+                    t.btn.style.border = '1px solid var(--app-border)';
+                    t.container.style.display = 'none';
+                }
             });
+        }
 
-            btnTabEpub2txt.addEventListener('click', () => {
-                btnTabEpub2txt.classList.add('btn-primary');
-                btnTabEpub2txt.classList.remove('btn-secondary');
-                btnTabEpub2txt.style.background = '';
-                btnTabEpub2txt.style.color = '';
-                btnTabEpub2txt.style.border = '';
+        if (btnTabMerge && btnTabEpub2txt && btnTabDocx2txt) {
+            btnTabMerge.addEventListener('click', () => selectTab(btnTabMerge, containerTabMerge));
+            btnTabEpub2txt.addEventListener('click', () => selectTab(btnTabEpub2txt, containerTabEpub2txt));
+            btnTabDocx2txt.addEventListener('click', () => selectTab(btnTabDocx2txt, containerTabDocx2txt));
+        }
 
-                btnTabMerge.classList.remove('btn-primary');
-                btnTabMerge.style.background = 'var(--app-soft)';
-                btnTabMerge.style.color = 'var(--app-text)';
-                btnTabMerge.style.border = '1px solid var(--app-border)';
+        // Search & Select Controls for Main File List
+        const txtSearchFiles = document.getElementById('txt-search-files');
+        const btnSelectAll = document.getElementById('btn-select-all');
+        const btnDeselectAll = document.getElementById('btn-deselect-all');
+        const selSortPriority = document.getElementById('sel-sort-priority');
 
-                containerTabMerge.style.display = 'none';
-                containerTabEpub2txt.style.display = '';
+        if (txtSearchFiles) {
+            txtSearchFiles.addEventListener('input', (e) => {
+                searchQuery = e.target.value.toLowerCase().trim();
+                renderFileList();
+            });
+        }
+        if (btnSelectAll) {
+            btnSelectAll.addEventListener('click', () => {
+                const query = searchQuery;
+                selectedFiles.forEach(f => {
+                    if (f.name.toLowerCase().includes(query)) {
+                        f.checked = true;
+                    }
+                });
+                renderFileList();
+            });
+        }
+        if (btnDeselectAll) {
+            btnDeselectAll.addEventListener('click', () => {
+                const query = searchQuery;
+                selectedFiles.forEach(f => {
+                    if (f.name.toLowerCase().includes(query)) {
+                        f.checked = false;
+                    }
+                });
+                renderFileList();
+            });
+        }
+        if (selSortPriority) {
+            selSortPriority.addEventListener('change', () => {
+                selectedFiles = sortFilesMultiLevel(selectedFiles);
+                renderFileList();
             });
         }
 
@@ -121,6 +169,48 @@
 
         btnEpubStartConvert && btnEpubStartConvert.addEventListener('click', doEpubConvert);
         btnEpubClearList && btnEpubClearList.addEventListener('click', clearAllEpub);
+
+        // DOCX controls
+        const docxZone = document.getElementById('docx-drop-zone');
+        const inputDocxFiles = document.getElementById('input-docx-files');
+        const inputDocxFolder = document.getElementById('input-docx-folder');
+        const btnPickDocx = document.getElementById('btn-pick-docx');
+        const btnPickDocxFolder = document.getElementById('btn-pick-docx-folder');
+        const btnDocxStartConvert = document.getElementById('btn-docx-start-convert');
+        const btnDocxClearList = document.getElementById('btn-docx-clear-list');
+        const docxExportMode = document.getElementById('docx-export-mode');
+        const btnDocxPickSaveDir = document.getElementById('btn-docx-pick-save-dir');
+        const btnDocxClearSaveDir = document.getElementById('btn-docx-clear-save-dir');
+
+        btnPickDocx && btnPickDocx.addEventListener('click', () => inputDocxFiles.click());
+        btnPickDocxFolder && btnPickDocxFolder.addEventListener('click', () => inputDocxFolder.click());
+
+        inputDocxFiles && inputDocxFiles.addEventListener('change', (e) => handleDocxFileInput(e.target.files));
+        inputDocxFolder && inputDocxFolder.addEventListener('change', (e) => handleDocxFileInput(e.target.files));
+
+        docxZone && docxZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            docxZone.classList.add('dragover');
+        });
+        docxZone && docxZone.addEventListener('dragleave', () => docxZone.classList.remove('dragover'));
+        docxZone && docxZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            docxZone.classList.remove('dragover');
+            await handleDocxDropInput(e.dataTransfer);
+        });
+
+        docxExportMode && docxExportMode.addEventListener('change', (e) => {
+            const fieldMergedName = document.getElementById('field-docx-merged-name');
+            if (fieldMergedName) {
+                fieldMergedName.style.display = e.target.value === 'merged' ? '' : 'none';
+            }
+        });
+
+        btnDocxPickSaveDir && btnDocxPickSaveDir.addEventListener('click', chooseSaveDirectory);
+        btnDocxClearSaveDir && btnDocxClearSaveDir.addEventListener('click', clearSaveDirectory);
+
+        btnDocxStartConvert && btnDocxStartConvert.addEventListener('click', doDocxConvert);
+        btnDocxClearList && btnDocxClearList.addEventListener('click', clearAllDocx);
 
         // Load default save directory from IndexedDB
         try {
@@ -167,12 +257,57 @@
 
         // Actions
         btnMerge && btnMerge.addEventListener('click', doMerge);
+        btnGroupMerge && btnGroupMerge.addEventListener('click', doGroupMerge);
         btnPreview && btnPreview.addEventListener('click', doPreview);
+        const btnSortFiles = document.getElementById('btn-sort-files');
+        if (btnSortFiles) {
+            btnSortFiles.addEventListener('click', () => {
+                if (selectedFiles.length === 0) return;
+                selectedFiles = sortFilesMultiLevel(selectedFiles);
+                renderFileList();
+                pushFloatingLog('Đã sắp xếp danh sách file.', 'success');
+            });
+        }
+        const btnSortTimeFiles = document.getElementById('btn-sort-time-files');
+        if (btnSortTimeFiles) {
+            btnSortTimeFiles.addEventListener('click', () => {
+                if (selectedFiles.length === 0) return;
+                selectedFiles.sort((a, b) => {
+                    const timeA = a.fileObj?.lastModified || 0;
+                    const timeB = b.fileObj?.lastModified || 0;
+                    return timeA - timeB;
+                });
+                renderFileList();
+                pushFloatingLog('Đã sắp xếp danh sách file theo thời gian.', 'success');
+            });
+        }
         btnClear && btnClear.addEventListener('click', clearAll);
         btnRefreshLimits && btnRefreshLimits.addEventListener('click', () => renderLimits(true));
 
         // Initialize size filters
         initSizeFilters();
+
+        // Handle custom separator toggle
+        const mergeSeparator = document.getElementById('merge-separator');
+        const mergeSeparatorCustom = document.getElementById('merge-separator-custom');
+        if (mergeSeparator && mergeSeparatorCustom) {
+            mergeSeparator.addEventListener('change', () => {
+                if (mergeSeparator.value === 'custom') {
+                    mergeSeparatorCustom.style.display = 'block';
+                } else {
+                    mergeSeparatorCustom.style.display = 'none';
+                }
+            });
+        }
+
+        // Handle advanced merge options display
+        const chkAdvancedMerge = document.getElementById('chk-advanced-merge');
+        const advancedMergeOptions = document.getElementById('advanced-merge-options');
+        if (chkAdvancedMerge && advancedMergeOptions) {
+            chkAdvancedMerge.addEventListener('change', () => {
+                advancedMergeOptions.style.display = chkAdvancedMerge.checked ? 'flex' : 'none';
+            });
+        }
 
         // Initial system limits run
         renderLimits(false);
@@ -332,11 +467,11 @@
     // ─── Input Handling ────────────────────────────────────
     async function handleFileInput(fileList, isFolder) {
         const filtered = Array.from(fileList || []).filter(f =>
-            /\.(txt|epub|erub)$/i.test(f.name)
+            /\.(txt|epub|erub|doc|docx)$/i.test(f.name)
         );
 
         if (!filtered.length) {
-            pushFloatingLog('Không tìm thấy file hợp lệ (.txt, .epub, .erub) để tải lên.', 'warning');
+            pushFloatingLog('Không tìm thấy file hợp lệ (.txt, .epub, .erub, .doc, .docx) để tải lên.', 'warning');
             return;
         }
 
@@ -374,7 +509,7 @@
             }
         } else {
             const rawFiles = Array.from(dataTransfer.files).filter(f =>
-                /\.(txt|epub|erub)$/i.test(f.name)
+                /\.(txt|epub|erub|doc|docx)$/i.test(f.name)
             );
             files.push(...rawFiles);
         }
@@ -390,7 +525,7 @@
     async function scanEntry(entry, fileList) {
         if (entry.isFile) {
             const file = await new Promise((resolve) => entry.file(resolve));
-            if (/\.(txt|epub|erub)$/i.test(file.name)) {
+            if (/\.(txt|epub|erub|doc|docx)$/i.test(file.name)) {
                 fileList.push(file);
             }
         } else if (entry.isDirectory) {
@@ -404,6 +539,34 @@
         }
     }
 
+    async function extractDocxText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = function (loadEvent) {
+                const arrayBuffer = loadEvent.target.result;
+                if (typeof mammoth === 'undefined') {
+                    reject(new Error('Thư viện mammoth.js chưa được tải hoặc bị lỗi.'));
+                    return;
+                }
+                mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                    .then(function (result) {
+                        resolve(result.value || '');
+                    })
+                    .catch(function (err) {
+                        reject(err);
+                    });
+            };
+            reader.onerror = function (err) {
+                reject(err);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    async function extractDocText(file) {
+        throw new Error('Định dạng .doc (Word 97-2003) nhị phân cũ không được hỗ trợ đọc trực tiếp ở trình duyệt. Hãy lưu/chuyển đổi file này sang .docx hoặc .txt trước.');
+    }
+
     async function processAndAddFiles(files, parentFolderName) {
         pushFloatingLog(`Đang xử lý ${files.length} file...`, 'info');
         const items = [];
@@ -415,6 +578,10 @@
                     text = await file.text();
                 } else if (/\.(epub|erub)$/i.test(file.name)) {
                     text = await extractEpubText(file);
+                } else if (/\.docx$/i.test(file.name)) {
+                    text = await extractDocxText(file);
+                } else if (/\.doc$/i.test(file.name)) {
+                    text = await extractDocText(file);
                 }
 
                 items.push({
@@ -430,12 +597,7 @@
             }
         }
 
-        // Sort files naturally
-        items.sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-        );
-
-        selectedFiles = [...selectedFiles, ...items];
+        selectedFiles = sortFilesMultiLevel([...selectedFiles, ...items]);
         
         // Auto fill filename
         const filenameEl = document.getElementById('merge-filename');
@@ -522,7 +684,11 @@
         const listEl = document.getElementById('merge-file-list');
         const summaryEl = document.getElementById('merge-file-summary');
         const btnMerge = document.getElementById('btn-merge');
+        const btnGroupMerge = document.getElementById('btn-group-merge');
         const btnPreview = document.getElementById('btn-preview-merge');
+
+        const query = searchQuery;
+        const filteredBySearch = selectedFiles.filter(f => f.name.toLowerCase().includes(query));
 
         const totalCount = selectedFiles.length;
         const checkedFiles = selectedFiles.filter(f => f.checked);
@@ -536,26 +702,75 @@
         }
 
         if (listEl) {
-            listEl.innerHTML = selectedFiles.map((file, i) => `
-                <div class="ghep-tach-file-row ${file.checked ? '' : 'file-unchecked'}" draggable="true" data-id="${file.id}" data-index="${i}">
-                    <div class="ghep-tach-file-row-left">
-                        <input type="checkbox" class="file-checkbox" data-chk-id="${file.id}" ${file.checked ? 'checked' : ''}>
-                        <span class="file-name">${i + 1}. ${escapeHtml(file.name)}</span>
+            listEl.innerHTML = filteredBySearch.map((file, i) => {
+                const lastModifiedDate = file.fileObj?.lastModified 
+                    ? new Date(file.fileObj.lastModified).toLocaleString('vi-VN') 
+                    : 'N/A';
+                return `
+                    <div class="ghep-tach-file-row ${file.checked ? '' : 'file-unchecked'}" draggable="true" data-id="${file.id}" data-index="${i}">
+                        <div class="ghep-tach-file-row-left" style="flex: 1; min-width: 0;">
+                            <input type="checkbox" class="file-checkbox" data-chk-id="${file.id}" ${file.checked ? 'checked' : ''}>
+                            <span class="file-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;" title="${escapeHtml(file.name)}">${i + 1}. ${escapeHtml(file.name)}</span>
+                        </div>
+                        <span class="file-date" style="font-size: 0.8rem; color: var(--app-muted); margin-left: auto; margin-right: 1rem; flex-shrink: 0;">${lastModifiedDate}</span>
+                        <span class="file-size" style="flex-shrink: 0; min-width: 70px; text-align: right;">${formatBytes(file.size)}</span>
+                        <button type="button" class="btn btn-small btn-secondary btn-append-preview" data-id="${file.id}" style="font-size: 0.75rem; padding: 0.15rem 0.35rem; margin-left: 0.5rem; height: auto; min-height: unset; flex-shrink: 0;" title="Thêm nội dung file này vào bản xem trước">➕</button>
+                        <button type="button" class="btn-delete" data-del-id="${file.id}" style="flex-shrink: 0;">✕</button>
                     </div>
-                    <span class="file-size">${formatBytes(file.size)}</span>
-                    <button type="button" class="btn-delete" data-del-id="${file.id}">✕</button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
-            // Checkbox changes
-            listEl.querySelectorAll('.file-checkbox').forEach(chk => {
+            // Checkbox changes with shift click
+            listEl.querySelectorAll('.file-checkbox').forEach((chk, idx) => {
                 chk.addEventListener('change', (e) => {
                     const id = e.target.dataset.chkId;
+                    const isChecked = e.target.checked;
+
+                    if (e.shiftKey && lastCheckedIndex !== -1) {
+                        const start = Math.min(lastCheckedIndex, idx);
+                        const end = Math.max(lastCheckedIndex, idx);
+
+                        for (let k = start; k <= end; k++) {
+                            const item = filteredBySearch[k];
+                            if (item) item.checked = isChecked;
+                        }
+                    } else {
+                        const file = selectedFiles.find(f => f.id === id);
+                        if (file) file.checked = isChecked;
+                        lastCheckedIndex = idx;
+                    }
+
+                    renderFileList();
+                    renderLimits(false);
+                });
+            });
+
+            // Append file text to preview
+            listEl.querySelectorAll('.btn-append-preview').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = e.currentTarget.dataset.id;
                     const file = selectedFiles.find(f => f.id === id);
                     if (file) {
-                        file.checked = e.target.checked;
-                        renderFileList();
-                        renderLimits(false);
+                        const previewEl = document.getElementById('merge-preview-text');
+                        if (previewEl) {
+                            const hasCursor = previewEl.selectionStart || previewEl.selectionEnd || previewEl === document.activeElement;
+                            const startPos = hasCursor ? previewEl.selectionStart : previewEl.value.length;
+                            const endPos = hasCursor ? previewEl.selectionEnd : previewEl.value.length;
+                            const value = previewEl.value;
+                            const textToAppend = file.text + "\n\n";
+
+                            previewEl.value = value.substring(0, startPos) + textToAppend + value.substring(endPos);
+                            previewEl.focus();
+                            previewEl.selectionStart = startPos + textToAppend.length;
+                            previewEl.selectionEnd = startPos + textToAppend.length;
+
+                            const resultPanel = document.getElementById('merge-result-panel');
+                            if (resultPanel) resultPanel.style.display = '';
+                            updateMergeStats([file], previewEl.value);
+
+                            pushFloatingLog(`Đã chèn nội dung file [${file.name}] vào bản xem trước.`, 'success');
+                        }
                     }
                 });
             });
@@ -575,6 +790,7 @@
         }
 
         if (btnMerge) btnMerge.disabled = checkedCount < 1;
+        if (btnGroupMerge) btnGroupMerge.disabled = checkedCount < 1;
         if (btnPreview) btnPreview.disabled = checkedCount < 1;
 
         renderLimits(false);
@@ -629,8 +845,90 @@
             case 'newline1': return '\n';
             case 'line': return '\n──────────────\n';
             case 'none': return '';
+            case 'custom':
+                const customEl = document.getElementById('merge-separator-custom');
+                let customVal = customEl ? customEl.value : '';
+                customVal = customVal
+                    .replace(/\\n/g, '\n')
+                    .replace(/\\r/g, '\r')
+                    .replace(/\\t/g, '\t');
+                return customVal;
             default: return '\n\n';
         }
+    }
+
+    function getGroupKey(filename) {
+        const name = stripExt(filename);
+        const match = name.match(/\d+/);
+        return match ? match[0] : name;
+    }
+
+    function getFileRootName(filename) {
+        let base = stripExt(filename);
+        let match = base.match(/^(.*?)\.\d+$/);
+        if (match) {
+            return match[1];
+        }
+        return base;
+    }
+
+    function compareFilenames(a, b) {
+        const nameA = stripExt(a);
+        const nameB = stripExt(b);
+        const splitRegex = /(\d+|\D+)/g;
+        const partsA = nameA.match(splitRegex) || [];
+        const partsB = nameB.match(splitRegex) || [];
+        const length = Math.max(partsA.length, partsB.length);
+        for (let i = 0; i < length; i++) {
+            if (partsA[i] === undefined) return -1;
+            if (partsB[i] === undefined) return 1;
+            const partA = partsA[i];
+            const partB = partsB[i];
+            const numA = parseInt(partA, 10);
+            const numB = parseInt(partB, 10);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                if (numA !== numB) {
+                    return numA - numB;
+                }
+            } else {
+                if (partA !== partB) {
+                    return partA.localeCompare(partB, undefined, { numeric: true, sensitivity: 'base' });
+                }
+            }
+        }
+        return 0;
+    }
+
+    const ADVANCED_CHAPTER_PATTERNS = [
+        /Chương\s+\d+/i,
+        /第\s*\d+\s*章/,
+        /第.+章/,
+        /Chapter\s+\d+/i
+    ];
+
+    function parseChapterFile(text) {
+        const lines = text.split('\n');
+        let titleLine = null;
+        let titleIndex = -1;
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            const isMatch = ADVANCED_CHAPTER_PATTERNS.some(regex => regex.test(line));
+            if (isMatch) {
+                titleLine = line;
+                titleIndex = i;
+                break;
+            }
+        }
+        if (titleIndex === -1) {
+            return null; // Discard
+        }
+        const contentLines = lines.slice();
+        contentLines.splice(titleIndex, 1);
+        const content = contentLines.join('\n').trim();
+        return {
+            title: titleLine,
+            content: content
+        };
     }
 
     async function doMerge() {
@@ -647,45 +945,155 @@
         const defaultName = sanitizeBasename(stripExt(checkedFiles[0].name));
         const filename = sanitizeBasename((filenameEl && filenameEl.value.trim()) || defaultName || 'tonghop');
 
-        pushFloatingLog(`Bắt đầu ghép ${checkedFiles.length} file sang định dạng .${format}...`, 'info');
+        const chkAdvancedMerge = document.getElementById('chk-advanced-merge');
+        const isAdvanced = chkAdvancedMerge && chkAdvancedMerge.checked;
+
+        if (isAdvanced && format !== 'txt') {
+            pushFloatingLog('Chế độ ghép chương nâng cao hiện tại chỉ hỗ trợ xuất file .txt.', 'warning');
+        }
+
+        pushFloatingLog(`Bắt đầu ghép ${checkedFiles.length} file sang định dạng .${isAdvanced ? 'txt' : format}...`, 'info');
 
         try {
-            let blob;
-            if (format === 'txt') {
+            const successfullyMergedIds = new Set();
+
+            if (isAdvanced) {
                 const separator = getSeparator();
-                const mergedText = checkedFiles.map(f => f.text).join(separator);
-                blob = new Blob([mergedText], { type: 'text/plain;charset=utf-8' });
+                const groups = {};
                 
-                // Warn size
-                if (mergedText.length > 5000000) {
-                    pushFloatingLog('Cảnh báo: File văn bản ghép lại cực lớn (> 5 triệu ký tự). Có thể gây giật lag khi mở bằng Wordpad/Notepad.', 'warning');
-                }
-            } else {
-                // epub or erub (both generated as standard EPUB zip format)
-                blob = await buildEpubBlob(checkedFiles, filename);
-            }
+                checkedFiles.forEach(file => {
+                    const key = getGroupKey(file.name);
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(file);
+                });
 
-            const fullName = `${filename}.${format}`;
-            if (defaultSaveDirHandle) {
-                // Request permission write
-                const hasPermission = await verifyPermission(defaultSaveDirHandle, true);
-                if (hasPermission) {
-                    const fileHandle = await defaultSaveDirHandle.getFileHandle(fullName, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                    pushFloatingLog(`Đã lưu trực tiếp file thành công vào thư mục mặc định: ${fullName}`, 'success');
+                const outputFiles = [];
+                for (const [key, files] of Object.entries(groups)) {
+                    files.sort((a, b) => compareFilenames(a.name, b.name));
+                    
+                    // Determine output filename from the longest root name in the group
+                    let longestRoot = key;
+                    files.forEach(f => {
+                        const root = getFileRootName(f.name);
+                        if (root.length > longestRoot.length) {
+                            longestRoot = root;
+                        }
+                    });
+                    const groupName = longestRoot;
+                    
+                    const validChapters = [];
+                    let skippedCount = 0;
+
+                    files.forEach(f => {
+                        const parsed = parseChapterFile(f.text);
+                        if (parsed) {
+                            validChapters.push(`${parsed.title}\n\n${parsed.content}`);
+                            successfullyMergedIds.add(f.id);
+                        } else {
+                            skippedCount++;
+                        }
+                    });
+
+                    if (skippedCount > 0) {
+                        pushFloatingLog(`Nhóm [${groupName}]: Bỏ qua ${skippedCount} file lỗi không tìm thấy tiêu đề chương.`, 'warning');
+                    }
+
+                    if (validChapters.length > 0) {
+                        const mergedText = validChapters.join(separator);
+                        const blob = new Blob([mergedText], { type: 'text/plain;charset=utf-8' });
+                        outputFiles.push({
+                            name: `${groupName}_ghep.txt`,
+                            blob: blob,
+                            text: mergedText
+                        });
+                    }
+                }
+
+                if (outputFiles.length === 0) {
+                    pushFloatingLog('Không có file nào chứa chương hợp lệ để ghép.', 'error');
+                    return;
+                }
+
+                if (outputFiles.length === 1) {
+                    const fileObj = outputFiles[0];
+                    if (defaultSaveDirHandle) {
+                        const hasPermission = await verifyPermission(defaultSaveDirHandle, true);
+                        if (hasPermission) {
+                            const fileHandle = await defaultSaveDirHandle.getFileHandle(fileObj.name, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(fileObj.blob);
+                            await writable.close();
+                            pushFloatingLog(`Đã lưu file ghép thành công: ${fileObj.name}`, 'success');
+                        } else {
+                            downloadBlob(fileObj.blob, fileObj.name);
+                        }
+                    } else {
+                        downloadBlob(fileObj.blob, fileObj.name);
+                    }
+                    updateMergeStats(checkedFiles, fileObj.text);
                 } else {
-                    pushFloatingLog('Không có quyền ghi vào thư mục. Chuyển sang tải trực tiếp qua trình duyệt.', 'warning');
-                    downloadBlob(blob, fullName);
+                    const zip = new JSZip();
+                    outputFiles.forEach(fileObj => {
+                        zip.file(fileObj.name, fileObj.blob);
+                    });
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    const zipName = 'ghep_truyen_nang_cao.zip';
+
+                    if (defaultSaveDirHandle) {
+                        const hasPermission = await verifyPermission(defaultSaveDirHandle, true);
+                        if (hasPermission) {
+                            const fileHandle = await defaultSaveDirHandle.getFileHandle(zipName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(zipBlob);
+                            await writable.close();
+                            pushFloatingLog(`Đã lưu file ZIP chứa các nhóm vào thư mục: ${zipName}`, 'success');
+                        } else {
+                            downloadBlob(zipBlob, zipName);
+                        }
+                    } else {
+                        downloadBlob(zipBlob, zipName);
+                    }
+                    updateMergeStats(checkedFiles, '');
                 }
             } else {
-                downloadBlob(blob, fullName);
-                pushFloatingLog(`Ghép file thành công! Đã bắt đầu tải xuống: ${fullName}`, 'success');
+                checkedFiles.forEach(f => successfullyMergedIds.add(f.id));
+
+                let blob;
+                if (format === 'txt') {
+                    const separator = getSeparator();
+                    const mergedText = checkedFiles.map(f => f.text).join(separator);
+                    blob = new Blob([mergedText], { type: 'text/plain;charset=utf-8' });
+                    
+                    if (mergedText.length > 5000000) {
+                        pushFloatingLog('Cảnh báo: File văn bản ghép lại cực lớn (> 5 triệu ký tự).', 'warning');
+                    }
+                } else {
+                    blob = await buildEpubBlob(checkedFiles, filename);
+                }
+
+                const fullName = `${filename}.${format}`;
+                if (defaultSaveDirHandle) {
+                    const hasPermission = await verifyPermission(defaultSaveDirHandle, true);
+                    if (hasPermission) {
+                        const fileHandle = await defaultSaveDirHandle.getFileHandle(fullName, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        pushFloatingLog(`Đã lưu trực tiếp file thành công: ${fullName}`, 'success');
+                    } else {
+                        downloadBlob(blob, fullName);
+                    }
+                } else {
+                    downloadBlob(blob, fullName);
+                    pushFloatingLog(`Ghép file thành công! Đã bắt đầu tải xuống: ${fullName}`, 'success');
+                }
+
+                updateMergeStats(checkedFiles, format === 'txt' ? checkedFiles.map(f => f.text).join(getSeparator()) : '');
             }
 
-            // Update preview stats
-            updateMergeStats(checkedFiles, format === 'txt' ? checkedFiles.map(f => f.text).join(getSeparator()) : '');
+            // Remove successfully merged files from the list
+            selectedFiles = selectedFiles.filter(f => !successfullyMergedIds.has(f.id));
+            renderFileList();
         } catch (e) {
             pushFloatingLog('Lỗi khi ghép file: ' + e.message, 'error');
         }
@@ -698,15 +1106,57 @@
             return;
         }
 
+        const chkAdvancedMerge = document.getElementById('chk-advanced-merge');
+        const isAdvanced = chkAdvancedMerge && chkAdvancedMerge.checked;
         const separator = getSeparator();
-        const mergedText = checkedFiles.map(f => f.text).join(separator);
+
+        let mergedText = '';
+        if (isAdvanced) {
+            const groups = {};
+            checkedFiles.forEach(file => {
+                const key = getGroupKey(file.name);
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(file);
+            });
+
+            let combinedPreview = '';
+            for (const [key, files] of Object.entries(groups)) {
+                files.sort((a, b) => compareFilenames(a.name, b.name));
+                
+                // Determine output filename from the longest root name in the group
+                let longestRoot = key;
+                files.forEach(f => {
+                    const root = getFileRootName(f.name);
+                    if (root.length > longestRoot.length) {
+                        longestRoot = root;
+                    }
+                });
+                const groupName = longestRoot;
+
+                const validChapters = [];
+                files.forEach(f => {
+                    const parsed = parseChapterFile(f.text);
+                    if (parsed) {
+                        validChapters.push(`${parsed.title}\n\n${parsed.content}`);
+                    }
+                });
+
+                if (validChapters.length > 0) {
+                    const groupText = validChapters.join(separator);
+                    combinedPreview += `=== FILE: ${groupName}_ghep.txt ===\n\n${groupText}\n\n`;
+                }
+            }
+            mergedText = combinedPreview || 'Không có chương nào hợp lệ để hiển thị.';
+        } else {
+            mergedText = checkedFiles.map(f => f.text).join(separator);
+        }
 
         const previewEl = document.getElementById('merge-preview-text');
         if (previewEl) {
             previewEl.value = mergedText;
         }
 
-        updateMergeStats(checkedFiles, mergedText);
+        updateMergeStats(checkedFiles, isAdvanced ? '' : mergedText);
         pushFloatingLog('Đã tạo bản xem trước nội dung thành công.', 'success');
     }
 
@@ -1278,6 +1728,310 @@ ${ncxPoints}  </navMap>
         pushFloatingLog('Đã hoàn tất chuyển đổi toàn bộ file EPUB!', 'success');
     }
 
+    // ─── DOCX to TXT Converter ─────────────────────────────
+    async function handleDocxFileInput(fileList) {
+        const filtered = Array.from(fileList || []).filter(f =>
+            /\.docx$/i.test(f.name)
+        );
+
+        if (!filtered.length) {
+            pushFloatingLog('Không tìm thấy file DOCX hợp lệ để tải lên.', 'warning');
+            return;
+        }
+
+        await processAndAddDocxFiles(filtered);
+    }
+
+    async function handleDocxDropInput(dataTransfer) {
+        const files = [];
+        const items = dataTransfer.items;
+
+        if (items) {
+            const entries = [];
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.kind === 'file') {
+                    const entry = item.webkitGetAsEntry();
+                    if (entry) {
+                        entries.push(entry);
+                    }
+                }
+            }
+
+            for (const entry of entries) {
+                await scanDocxEntry(entry, files);
+            }
+        } else {
+            const rawFiles = Array.from(dataTransfer.files).filter(f =>
+                /\.docx$/i.test(f.name)
+            );
+            files.push(...rawFiles);
+        }
+
+        if (!files.length) {
+            pushFloatingLog('Không tìm thấy file DOCX hợp lệ trong mục thả vào.', 'warning');
+            return;
+        }
+
+        await processAndAddDocxFiles(files);
+    }
+
+    async function scanDocxEntry(entry, fileList) {
+        if (entry.isFile) {
+            const file = await new Promise((resolve) => entry.file(resolve));
+            if (/\.docx$/i.test(file.name)) {
+                fileList.push(file);
+            }
+        } else if (entry.isDirectory) {
+            const reader = entry.createReader();
+            const entries = await new Promise((resolve) => {
+                reader.readEntries((res) => resolve(res), () => resolve([]));
+            });
+            for (const sub of entries) {
+                await scanDocxEntry(sub, fileList);
+            }
+        }
+    }
+
+    async function processAndAddDocxFiles(files) {
+        pushFloatingLog(`Đang xử lý ${files.length} file DOCX...`, 'info');
+        const items = [];
+
+        for (const file of files) {
+            items.push({
+                id: Math.random().toString(36).substr(2, 9),
+                name: file.name,
+                size: file.size,
+                fileObj: file,
+                checked: true
+            });
+        }
+
+        items.sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+        );
+
+        docxSelectedFiles = [...docxSelectedFiles, ...items];
+        pushFloatingLog(`Đã tải lên thành công ${items.length} file DOCX.`, 'success');
+        renderDocxFileList();
+    }
+
+    function renderDocxFileList() {
+        const listEl = document.getElementById('docx-file-list');
+        const summaryEl = document.getElementById('docx-file-summary');
+        const btnConvert = document.getElementById('btn-docx-start-convert');
+
+        const totalCount = docxSelectedFiles.length;
+        const checkedFiles = docxSelectedFiles.filter(f => f.checked);
+        const checkedCount = checkedFiles.length;
+        const totalBytes = checkedFiles.reduce((s, f) => s + f.size, 0);
+
+        if (summaryEl) {
+            summaryEl.innerHTML = totalCount
+                ? `Đã nạp ${totalCount} file DOCX · Đang tích chọn <b>${checkedCount}</b> file · Tổng: <b>${formatBytes(totalBytes)}</b>`
+                : 'Chưa chọn file DOCX';
+        }
+
+        if (listEl) {
+            listEl.innerHTML = docxSelectedFiles.map((file, i) => `
+                <div class="ghep-tach-file-row ${file.checked ? '' : 'file-unchecked'}" draggable="true" data-id="${file.id}" data-index="${i}">
+                    <div class="ghep-tach-file-row-left">
+                        <input type="checkbox" class="docx-file-checkbox" data-chk-id="${file.id}" ${file.checked ? 'checked' : ''}>
+                        <span class="file-name">${i + 1}. ${escapeHtml(file.name)}</span>
+                    </div>
+                    <span class="file-size">${formatBytes(file.size)}</span>
+                    <button type="button" class="btn-docx-delete" data-del-id="${file.id}">✕</button>
+                </div>
+            `).join('');
+
+            listEl.querySelectorAll('.docx-file-checkbox').forEach(chk => {
+                chk.addEventListener('change', (e) => {
+                    const id = e.target.dataset.chkId;
+                    const file = docxSelectedFiles.find(f => f.id === id);
+                    if (file) {
+                        file.checked = e.target.checked;
+                        renderDocxFileList();
+                    }
+                });
+            });
+
+            listEl.querySelectorAll('.btn-docx-delete').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = e.currentTarget.dataset.delId;
+                    docxSelectedFiles = docxSelectedFiles.filter(f => f.id !== id);
+                    renderDocxFileList();
+                });
+            });
+
+            setupDocxDragReorder(listEl);
+        }
+
+        if (btnConvert) btnConvert.disabled = checkedCount < 1;
+    }
+
+    function setupDocxDragReorder(listEl) {
+        let draggedId = null;
+
+        listEl.querySelectorAll('.ghep-tach-file-row').forEach(row => {
+            row.addEventListener('dragstart', (e) => {
+                draggedId = row.dataset.id;
+                e.dataTransfer.effectAllowed = 'move';
+                row.style.opacity = '0.5';
+            });
+
+            row.addEventListener('dragend', () => {
+                row.style.opacity = '';
+                draggedId = null;
+            });
+
+            row.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                row.style.borderColor = 'var(--app-primary)';
+            });
+
+            row.addEventListener('dragleave', () => {
+                row.style.borderColor = '';
+            });
+
+            row.addEventListener('drop', (e) => {
+                e.preventDefault();
+                row.style.borderColor = '';
+                const targetId = row.dataset.id;
+                if (!draggedId || draggedId === targetId) return;
+
+                const draggedIdx = docxSelectedFiles.findIndex(f => f.id === draggedId);
+                const targetIdx = docxSelectedFiles.findIndex(f => f.id === targetId);
+
+                const [moved] = docxSelectedFiles.splice(draggedIdx, 1);
+                docxSelectedFiles.splice(targetIdx, 0, moved);
+                renderDocxFileList();
+                pushFloatingLog('Đã sắp xếp lại thứ tự file DOCX.', 'info');
+            });
+        });
+    }
+
+    function clearAllDocx() {
+        docxSelectedFiles = [];
+        const consoleEl = document.getElementById('docx-console-log');
+        if (consoleEl) consoleEl.value = '';
+        const progressBar = document.getElementById('docx-progress-bar');
+        if (progressBar) progressBar.style.width = '0%';
+        renderDocxFileList();
+        pushFloatingLog('Đã xóa danh sách file DOCX.', 'info');
+    }
+
+    function writeDocxConsoleLog(message, isError = false) {
+        const consoleEl = document.getElementById('docx-console-log');
+        if (consoleEl) {
+            const time = new Date().toLocaleTimeString();
+            const prefix = isError ? '✗' : '✓';
+            consoleEl.value += `[${time}] ${prefix} ${message}\n`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+    }
+
+    async function doDocxConvert() {
+        const checkedFiles = docxSelectedFiles.filter(f => f.checked);
+        if (checkedFiles.length === 0) {
+            pushFloatingLog('Không có file DOCX nào được chọn để chuyển đổi.', 'warning');
+            return;
+        }
+
+        const exportMode = document.getElementById('docx-export-mode').value;
+        const addParagraphSpace = document.getElementById('chk-docx-add-paragraph-space').checked;
+        const removeBlankLines = document.getElementById('chk-docx-remove-blank-lines').checked;
+        
+        const mergedFilenameEl = document.getElementById('docx-merged-filename');
+        const mergedFilename = sanitizeBasename(mergedFilenameEl ? mergedFilenameEl.value.trim() : 'docx_tonghop') + '.txt';
+
+        const consoleEl = document.getElementById('docx-console-log');
+        if (consoleEl) consoleEl.value = '';
+        
+        const progressBar = document.getElementById('docx-progress-bar');
+        const progressBarContainer = document.getElementById('docx-progress-bar-container');
+        if (progressBarContainer) progressBarContainer.style.display = 'block';
+        if (progressBar) progressBar.style.width = '0%';
+
+        writeDocxConsoleLog(`Bắt đầu chuyển đổi ${checkedFiles.length} file DOCX...`);
+
+        const total = checkedFiles.length;
+        let mergedTexts = [];
+
+        // Setup save dir permission if available
+        let hasPermission = false;
+        if (defaultSaveDirHandle) {
+            hasPermission = await verifyPermission(defaultSaveDirHandle, true);
+        }
+
+        for (let i = 0; i < total; i++) {
+            const fileItem = checkedFiles[i];
+            const pct = Math.floor((i / total) * 100);
+            if (progressBar) progressBar.style.width = `${pct}%`;
+
+            writeDocxConsoleLog(`[${i + 1}/${total}] Đang chuyển đổi: ${fileItem.name}...`);
+
+            try {
+                let text = await extractDocxText(fileItem.fileObj);
+
+                if (addParagraphSpace) {
+                    text = text.split('\n')
+                               .map(line => line.trim())
+                               .filter(Boolean)
+                               .join('\n\n');
+                } else if (removeBlankLines) {
+                    text = text.split('\n')
+                               .map(line => line.trim())
+                               .filter(Boolean)
+                               .join('\n');
+                }
+
+                if (exportMode === 'individual') {
+                    const txtFilename = stripExt(fileItem.name) + '.txt';
+                    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+
+                    if (defaultSaveDirHandle && hasPermission) {
+                        const fileHandle = await defaultSaveDirHandle.getFileHandle(txtFilename, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        writeDocxConsoleLog(`Lưu thành công: ${txtFilename}`);
+                    } else {
+                        downloadBlob(blob, txtFilename);
+                        writeDocxConsoleLog(`Tải xuống trình duyệt: ${txtFilename}`);
+                    }
+                } else {
+                    mergedTexts.push(`=== BẮT ĐẦU FILE: ${stripExt(fileItem.name)} ===\n\n` + text);
+                    writeDocxConsoleLog(`Xử lý xong (chờ gộp): ${fileItem.name}`);
+                }
+
+            } catch (err) {
+                writeDocxConsoleLog(`${fileItem.name}: Không đọc được DOCX (${err.message})`, true);
+            }
+        }
+
+        if (progressBar) progressBar.style.width = '100%';
+
+        if (exportMode === 'merged' && mergedTexts.length > 0) {
+            const finalMergedText = mergedTexts.join('\n\n=========================================\n\n');
+            const blob = new Blob([finalMergedText], { type: 'text/plain;charset=utf-8' });
+
+            if (defaultSaveDirHandle && hasPermission) {
+                const fileHandle = await defaultSaveDirHandle.getFileHandle(mergedFilename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+                writeDocxConsoleLog(`Lưu file gộp thành công: ${mergedFilename}`);
+            } else {
+                downloadBlob(blob, mergedFilename);
+                writeDocxConsoleLog(`Tải xuống file gộp qua trình duyệt: ${mergedFilename}`);
+            }
+        }
+
+        writeDocxConsoleLog('--- Hoàn tất quá trình chuyển đổi ---');
+        pushFloatingLog('Đã hoàn tất chuyển đổi toàn bộ file DOCX!', 'success');
+    }
+
     // ─── Limit Measurement ────────────────────────────────
     async function collectLimits(force = false) {
         if (limitCache && !force) return limitCache;
@@ -1361,6 +2115,7 @@ ${ncxPoints}  </navMap>
     function initSizeFilters() {
         setupSizeFilter('merge');
         setupSizeFilter('epub');
+        setupSizeFilter('docx');
     }
 
     function setupSizeFilter(tab) {
@@ -1383,7 +2138,7 @@ ${ncxPoints}  </navMap>
             }
         });
 
-        const ranges = tab === 'merge' ? mergeSizeRanges : epubSizeRanges;
+        const ranges = tab === 'merge' ? mergeSizeRanges : (tab === 'epub' ? epubSizeRanges : docxSizeRanges);
 
         function renderRanges() {
             container.innerHTML = '';
@@ -1474,8 +2229,8 @@ ${ncxPoints}  </navMap>
     }
 
     function applySizeFilter(tab) {
-        const ranges = tab === 'merge' ? mergeSizeRanges : epubSizeRanges;
-        const fileList = tab === 'merge' ? selectedFiles : epubSelectedFiles;
+        const ranges = tab === 'merge' ? mergeSizeRanges : (tab === 'epub' ? epubSizeRanges : docxSizeRanges);
+        const fileList = tab === 'merge' ? selectedFiles : (tab === 'epub' ? epubSelectedFiles : docxSelectedFiles);
 
         if (fileList.length === 0) {
             pushFloatingLog('Danh sách file trống, không có gì để lọc.', 'warning');
@@ -1496,15 +2251,17 @@ ${ncxPoints}  </navMap>
 
         if (tab === 'merge') {
             renderFileList();
-        } else {
+        } else if (tab === 'epub') {
             renderEpubFileList();
+        } else {
+            renderDocxFileList();
         }
 
         pushFloatingLog(`Đã áp dụng bộ lọc: Tích chọn ${matchCount} file phù hợp kích thước.`, 'success');
     }
 
     function clearSizeFilter(tab) {
-        const fileList = tab === 'merge' ? selectedFiles : epubSelectedFiles;
+        const fileList = tab === 'merge' ? selectedFiles : (tab === 'epub' ? epubSelectedFiles : docxSelectedFiles);
         if (fileList.length === 0) return;
 
         fileList.forEach(file => {
@@ -1513,8 +2270,10 @@ ${ncxPoints}  </navMap>
 
         if (tab === 'merge') {
             renderFileList();
-        } else {
+        } else if (tab === 'epub') {
             renderEpubFileList();
+        } else {
+            renderDocxFileList();
         }
 
         pushFloatingLog('Đã tích chọn lại tất cả các file.', 'info');
@@ -1549,5 +2308,178 @@ ${ncxPoints}  </navMap>
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }, 100);
+    }
+
+    // ─── Group Sorting & Merging Helpers ──────────────────
+    function parseSpecialFilename(filename) {
+        const base = stripExt(filename).trim();
+        let match = base.match(/^(\d+)__([\s\S]*)$/);
+        if (match) {
+            return { isSpecial: true, group: match[1], isHeader: true, headerSuffix: match[2], num: -1 };
+        }
+        match = base.match(/^(\d+)_$/);
+        if (match) {
+            return { isSpecial: true, group: match[1], isHeader: true, headerSuffix: "", num: -1 };
+        }
+        match = base.match(/^(\d+)_(\d+)$/);
+        if (match) {
+            return { isSpecial: true, group: match[1], isHeader: false, headerSuffix: "", num: parseInt(match[2], 10) };
+        }
+        return { isSpecial: false };
+    }
+
+    function getFileTime(file) {
+        return file.fileObj?.lastModified || 0;
+    }
+
+    function compareSpecialName(a, b) {
+        const pA = parseSpecialFilename(a.name);
+        const pB = parseSpecialFilename(b.name);
+
+        if (pA.isSpecial && pB.isSpecial) {
+            const groupCompare = pA.group.localeCompare(pB.group, undefined, { numeric: true });
+            if (groupCompare !== 0) return groupCompare;
+
+            if (pA.isHeader && !pB.isHeader) return -1;
+            if (!pA.isHeader && pB.isHeader) return 1;
+            if (pA.isHeader && pB.isHeader) {
+                return pA.headerSuffix.localeCompare(pB.headerSuffix, undefined, { numeric: true, sensitivity: 'base' });
+            }
+            if (pA.num !== pB.num) return pA.num - pB.num;
+        }
+
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    }
+
+    function compareModifiedTime(a, b) {
+        return getFileTime(a) - getFileTime(b);
+    }
+
+    function sortFilesMultiLevel(files, primarySort, secondarySort) {
+        const mode = document.getElementById('sel-sort-priority')?.value || 'group_time';
+        const primary = primarySort || (mode === 'time_group' || mode === 'time_only' ? 'time' : 'name');
+        const secondary = secondarySort || (mode === 'group_time' || mode === 'time_only' ? 'time' : 'name');
+
+        if (mode === 'time_only') {
+            return files.slice().sort((a, b) => compareModifiedTime(a, b) || compareSpecialName(a, b));
+        }
+
+        if (mode === 'name_only') {
+            return files.slice().sort((a, b) => compareSpecialName(a, b) || compareModifiedTime(a, b));
+        }
+
+        return files.slice().sort((a, b) => {
+            const primaryCompare = primary === 'time' ? compareModifiedTime(a, b) : compareSpecialName(a, b);
+            if (primaryCompare !== 0) return primaryCompare;
+
+            const secondaryCompare = secondary === 'time' ? compareModifiedTime(a, b) : compareSpecialName(a, b);
+            if (secondaryCompare !== 0) return secondaryCompare;
+
+            return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        });
+    }
+
+    async function doGroupMerge() {
+        const checkedFiles = selectedFiles.filter(f => f.checked);
+        if (checkedFiles.length === 0) {
+            pushFloatingLog('Không có file nào được chọn để gộp.', 'warning');
+            return;
+        }
+
+        const specialGroups = {};
+        checkedFiles.forEach(file => {
+            const parsed = parseSpecialFilename(file.name);
+            if (parsed.isSpecial) {
+                if (!specialGroups[parsed.group]) {
+                    specialGroups[parsed.group] = [];
+                }
+                specialGroups[parsed.group].push({ file, parsed });
+            }
+        });
+
+        const groupsToMerge = {};
+        for (const [group, items] of Object.entries(specialGroups)) {
+            groupsToMerge[group] = items;
+        }
+
+        if (Object.keys(groupsToMerge).length === 0) {
+            pushFloatingLog('Không tìm thấy nhóm file dạng số_số hợp lệ để gộp.', 'warning');
+            return;
+        }
+
+        pushFloatingLog(`Bắt đầu gộp theo ${Object.keys(groupsToMerge).length} nhóm...`, 'info');
+
+        try {
+            const outputFiles = [];
+            const separator = getSeparator();
+
+            for (const [group, items] of Object.entries(groupsToMerge)) {
+                items.sort((a, b) => {
+                    const pA = a.parsed;
+                    const pB = b.parsed;
+                    if (pA.isHeader && !pB.isHeader) return -1;
+                    if (!pA.isHeader && pB.isHeader) return 1;
+                    if (pA.isHeader && pB.isHeader) {
+                        return pA.headerSuffix.localeCompare(pB.headerSuffix, undefined, { numeric: true });
+                    }
+                    return pA.num - pB.num;
+                });
+
+                const mergedText = items.map(item => item.file.text).join(separator);
+                const blob = new Blob([mergedText], { type: 'text/plain;charset=utf-8' });
+                outputFiles.push({
+                    name: `${group}.txt`,
+                    blob: blob,
+                    text: mergedText
+                });
+            }
+
+            let hasPermission = false;
+            if (defaultSaveDirHandle) {
+                hasPermission = await verifyPermission(defaultSaveDirHandle, true);
+            }
+
+            if (outputFiles.length === 1) {
+                const fileObj = outputFiles[0];
+                if (defaultSaveDirHandle && hasPermission) {
+                    const fileHandle = await defaultSaveDirHandle.getFileHandle(fileObj.name, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(fileObj.blob);
+                    await writable.close();
+                    pushFloatingLog(`Đã lưu file gộp thành công: ${fileObj.name}`, 'success');
+                } else {
+                    downloadBlob(fileObj.blob, fileObj.name);
+                }
+            } else {
+                const zip = new JSZip();
+                outputFiles.forEach(fileObj => {
+                    zip.file(fileObj.name, fileObj.blob);
+                });
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                const zipName = 'ghep_truyen_theo_nhom.zip';
+
+                if (defaultSaveDirHandle && hasPermission) {
+                    const fileHandle = await defaultSaveDirHandle.getFileHandle(zipName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(zipBlob);
+                    await writable.close();
+                    pushFloatingLog(`Đã lưu file ZIP chứa các nhóm vào thư mục: ${zipName}`, 'success');
+                } else {
+                    downloadBlob(zipBlob, zipName);
+                }
+            }
+
+            const mergedIds = new Set();
+            for (const [group, items] of Object.entries(groupsToMerge)) {
+                items.forEach(item => mergedIds.add(item.file.id));
+            }
+            selectedFiles = selectedFiles.filter(f => !mergedIds.has(f.id));
+            renderFileList();
+
+            pushFloatingLog('Đã hoàn tất gộp nhóm. Các file đã gộp đã được ẩn khỏi danh sách.', 'success');
+
+        } catch (e) {
+            pushFloatingLog('Lỗi khi gộp file theo nhóm: ' + e.message, 'error');
+        }
     }
 })();

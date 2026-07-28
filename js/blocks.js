@@ -2114,11 +2114,28 @@
         }
     }
 
+    function sanitizeExportBasename(name, fallback = 'block') {
+        const normalized = String(name || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/đ/g, 'd')
+            .replace(/Đ/g, 'D')
+            .replace(/[^a-zA-Z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 140)
+            .replace(/^-+|-+$/g, '');
+        return normalized || fallback;
+    }
+
+    function getBlockExportBasename(block, fallback = 'block') {
+        return sanitizeExportBasename(block && block.title, fallback);
+    }
+
     function downloadBlockFile(id) {
         const block = window.BlockSystem.blocks.find(item => item.id === id) || getSelectedBlock();
         if (!block) return;
         const blob = new Blob([block.content || ''], { type: 'text/plain;charset=utf-8' });
-        const cleanTitle = (block.title || 'block').replace(/[\\/:*?"<>|\s]+/g, '_');
+        const cleanTitle = getBlockExportBasename(block);
         downloadBlob(blob, `${cleanTitle}.txt`);
         showToast(`Đã tải ${cleanTitle}.txt`, 'success', 2200);
     }
@@ -2154,6 +2171,8 @@
 
         const chkRename = document.getElementById('chk-rename-on-export');
         const shouldRename = chkRename ? chkRename.checked : false;
+        const nameSource = document.getElementById('export-name-source')?.value || 'auto';
+        const useBlockNames = nameSource === 'block' || !shouldRename;
         const prefix = document.getElementById('export-prefix')?.value.trim() || '';
         const style = document.getElementById('export-number-style')?.value || 'num';
         const startNum = parseInt(document.getElementById('export-start-num')?.value, 10) || 1;
@@ -2169,17 +2188,20 @@
             let fileIndex = 0;
             let currentContent = '';
             let currentParts = [];
+            let currentFirstBlock = null;
 
             const flushFile = () => {
                 if (currentParts.length === 0) return;
                 const content = currentParts.join('\n\n').trim();
-                const base = shouldRename
-                    ? formatExportFilename(fileIndex, prefix, style, startNum)
-                    : `${prefix || 'file'}_${fileIndex + 1}`;
+                const rawBase = useBlockNames
+                    ? getBlockExportBasename(currentFirstBlock, `file-${fileIndex + 1}`)
+                    : formatExportFilename(fileIndex, prefix, style, startNum);
+                const base = sanitizeExportBasename(rawBase, `file-${fileIndex + 1}`);
                 outputFiles.push({ name: `${base}.txt`, content });
                 fileIndex++;
                 currentParts = [];
                 currentContent = '';
+                currentFirstBlock = null;
             };
 
             for (const block of blocks) {
@@ -2189,6 +2211,7 @@
                 if (text.length > charLimit) {
                     flushFile(); // Đẩy file đang xây dựng trước
                     let remaining = text;
+                    let partIndex = 1;
                     while (remaining.length > 0) {
                         // Cắt tại charLimit, ưu tiên cắt tại dòng mới
                         let cutAt = charLimit;
@@ -2198,20 +2221,24 @@
                         }
                         const part = remaining.slice(0, cutAt).trim();
                         remaining = remaining.slice(cutAt);
-                        const base = shouldRename
-                            ? formatExportFilename(fileIndex, prefix, style, startNum)
-                            : `${prefix || 'file'}_${fileIndex + 1}`;
+                        const rawBase = useBlockNames
+                            ? `${getBlockExportBasename(block, `file-${fileIndex + 1}`)}-phan-${partIndex}`
+                            : formatExportFilename(fileIndex, prefix, style, startNum);
+                        const base = sanitizeExportBasename(rawBase, `file-${fileIndex + 1}`);
                         outputFiles.push({ name: `${base}.txt`, content: part });
                         fileIndex++;
+                        partIndex++;
                     }
                 } else if (currentContent.length + text.length + 2 > charLimit) {
                     // Thêm block này sẽ vượt giới hạn → đẩy file hiện tại trước
                     flushFile();
                     currentParts.push(text);
                     currentContent = text;
+                    currentFirstBlock = block;
                 } else {
                     currentParts.push(text);
                     currentContent += (currentContent ? '\n\n' : '') + text;
+                    if (!currentFirstBlock) currentFirstBlock = block;
                 }
             }
             flushFile(); // Đẩy phần còn lại
@@ -2219,14 +2246,11 @@
         } else {
             // Không giới hạn ký tự: mỗi block = 1 file
             blocks.forEach((block, index) => {
-                let fileName = '';
-                if (shouldRename) {
-                    const base = formatExportFilename(index, prefix, style, startNum);
-                    fileName = `${base}.txt`;
-                } else {
-                    const base = (block.title || 'block').replace(/[\\/:*?"<>|\s]+/g, '_').trim();
-                    fileName = `${base || 'block'}.txt`;
-                }
+                const rawBase = useBlockNames
+                    ? getBlockExportBasename(block)
+                    : formatExportFilename(index, prefix, style, startNum);
+                const base = sanitizeExportBasename(rawBase, 'block');
+                const fileName = `${base}.txt`;
                 outputFiles.push({ name: fileName, content: block.content || '' });
             });
         }
@@ -2239,7 +2263,7 @@
             let dupCounter = 1;
             while (usedNames.has(finalName)) {
                 const baseWithoutExt = file.name.replace(/\.txt$/i, '');
-                finalName = `${baseWithoutExt}_${dupCounter}.txt`;
+                finalName = `${baseWithoutExt}-${dupCounter}.txt`;
                 dupCounter++;
             }
             usedNames.add(finalName);

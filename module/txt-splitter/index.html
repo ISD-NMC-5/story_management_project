@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Công cụ tách file TXT</title>
+
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div class="app-shell">
+      <header class="top-header">
+        <div>
+          <p class="eyebrow">TXT SPLITTER</p>
+          <h1>Công cụ tách file TXT</h1>
+          <p class="header-description">
+            Tách nội dung theo số từ hoặc từ khóa, xem trước và lưu hàng loạt.
+          </p>
+        </div>
+
+        <div class="header-actions">
+          <button id="saveConfigBtn" class="btn btn-secondary" type="button">
+            Lưu cấu hình
+          </button>
+
+          <button
+            id="resetConfigBtn"
+            class="btn btn-danger-outline"
+            type="button"
+          >
+            Đặt lại
+          </button>
+        </div>
+      </header>
+
+      <main class="main-layout">
+        <!-- Cột thiết lập -->
+        <section class="panel settings-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="step-number">01</span>
+              <h2>Thiết lập xử lý</h2>
+            </div>
+          </div>
+
+          <!-- Chọn file -->
+          <div class="form-group">
+            <label class="form-label">Chọn file TXT</label>
+
+            <label class="file-drop-zone" id="fileDropZone">
+              <input
+                id="txtFileInput"
+                type="file"
+                accept=".txt,text/plain"
+                hidden
+              />
+
+              <div class="file-icon">TXT</div>
+
+              <div>
+                <strong id="fileNameText">Nhấn để chọn file TXT</strong>
+                <p id="fileInfoText">Hoặc kéo và thả file vào khu vực này</p>
+              </div>
+            </label>
+          </div>
+
+          <!-- Chế độ tách -->
+          <div class="form-group">
+            <label class="form-label">Phương thức tách</label>
+
+            <div class="mode-grid">
+              <label class="mode-card active" data-mode-card="words">
+                <input type="radio" name="splitMode" value="words" checked />
+
+                <span class="mode-card-title">Tách theo số từ</span>
+                <span class="mode-card-description">
+                  Chia nội dung thành các phần có số từ gần bằng nhau.
+                </span>
+              </label>
+
+              <label class="mode-card" data-mode-card="keywords">
+                <input type="radio" name="splitMode" value="keywords" />
+
+                <span class="mode-card-title">Tách theo từ khóa</span>
+                <span class="mode-card-description">
+                  Bắt đầu một phần mới khi phát hiện từ khóa.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Tách theo số từ -->
+          <div id="wordSettings" class="settings-box">
+            <div class="form-group">
+              <label for="wordsPerFile" class="form-label">
+                Số từ tối đa trong mỗi file
+              </label>
+
+              <input
+                id="wordsPerFile"
+                class="form-control"
+                type="number"
+                min="1"
+                value="1000"
+              />
+            </div>
+          </div>
+
+          <!-- Tách theo từ khóa -->
+          <div id="keywordSettings" class="settings-box hidden">
+            <div class="form-group">
+              <label for="keywordsInput" class="form-label">
+                Danh sách từ khóa
+              </label>
+
+              <textarea
+                id="keywordsInput"
+                class="form-control textarea-control"
+                placeholder="Mỗi từ khóa một dòng hoặc ngăn cách bằng dấu phẩy. Ví dụ:
+Chương 1
+Chương 2
+Kết luận"
+              ></textarea>
+
+              <p class="form-help">Từ khóa sẽ được giữ lại ở đầu mỗi phần.</p>
+            </div>
+
+            <label class="checkbox-row">
+              <input id="caseSensitive" type="checkbox" />
+              <span>Phân biệt chữ hoa và chữ thường</span>
+            </label>
+
+            <label class="checkbox-row">
+              <input id="removeEmptyParts" type="checkbox" checked />
+              <span>Bỏ qua các phần không có nội dung</span>
+            </label>
+          </div>
+
+          <!-- Đặt tên file -->
+          <div class="form-group">
+            <label class="form-label">Đặt tên file xuất</label>
+
+            <div class="two-column-grid">
+              <div>
+                <label for="outputPrefix" class="sub-label"> Tiền tố </label>
+
+                <input
+                  id="outputPrefix"
+                  class="form-control"
+                  type="text"
+                  value="phan"
+                  placeholder="Ví dụ: phan"
+                />
+              </div>
+
+              <div>
+                <label for="startNumber" class="sub-label">
+                  Bắt đầu từ số
+                </label>
+
+                <input
+                  id="startNumber"
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  value="1"
+                />
+              </div>
+            </div>
+
+            <div class="two-column-grid margin-top-small">
+              <div>
+                <label for="numberPadding" class="sub-label"> Số chữ số </label>
+
+                <select id="numberPadding" class="form-control">
+                  <option value="1">1 chữ số</option>
+                  <option value="2">2 chữ số</option>
+                  <option value="3" selected>3 chữ số</option>
+                  <option value="4">4 chữ số</option>
+                  <option value="5">5 chữ số</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="fileSeparator" class="sub-label">
+                  Ký tự phân cách
+                </label>
+
+                <select id="fileSeparator" class="form-control">
+                  <option value="_" selected>Dấu gạch dưới _</option>
+                  <option value="-">Dấu gạch ngang -</option>
+                  <option value=" ">Khoảng trắng</option>
+                  <option value="">Không dùng</option>
+                </select>
+              </div>
+            </div>
+
+            <p class="file-name-example">
+              Tên mẫu:
+              <strong id="fileNameExample">phan_001.txt</strong>
+            </p>
+          </div>
+
+          <!-- Chọn thư mục -->
+          <div class="form-group">
+            <label class="form-label">Chọn thư mục lưu</label>
+
+            <button id="chooseFolderBtn" class="folder-selector" type="button">
+              <span class="folder-icon">📁</span>
+
+              <span>
+                <strong id="folderNameText"> Chưa chọn thư mục </strong>
+
+                <small> Nhấn để chọn thư mục lưu kết quả </small>
+              </span>
+            </button>
+
+            <p class="form-help">
+              Chức năng chọn thư mục hoạt động tốt nhất trên Chrome hoặc Edge.
+            </p>
+          </div>
+
+          <!-- Hành động -->
+          <div class="action-grid">
+            <button id="processBtn" class="btn btn-primary" type="button">
+              Xử lý và xem trước
+            </button>
+
+            <button
+              id="saveFilesBtn"
+              class="btn btn-success"
+              type="button"
+              disabled
+            >
+              Lưu các file
+            </button>
+          </div>
+        </section>
+
+        <!-- Cột kết quả -->
+        <section class="result-column">
+          <!-- Thống kê -->
+          <div class="panel">
+            <div class="panel-heading">
+              <div>
+                <span class="step-number">02</span>
+                <h2>Thống kê</h2>
+              </div>
+            </div>
+
+            <div class="statistics-grid">
+              <article class="stat-card">
+                <span class="stat-label">Tổng ký tự</span>
+                <strong id="totalCharactersStat">0</strong>
+              </article>
+
+              <article class="stat-card">
+                <span class="stat-label">Tổng số từ</span>
+                <strong id="totalWordsStat">0</strong>
+              </article>
+
+              <article class="stat-card">
+                <span class="stat-label">Số file xuất</span>
+                <strong id="totalFilesStat">0</strong>
+              </article>
+
+              <article class="stat-card">
+                <span class="stat-label">Trung bình từ/file</span>
+                <strong id="averageWordsStat">0</strong>
+              </article>
+            </div>
+          </div>
+
+          <!-- Thanh tiến trình -->
+          <div class="panel">
+            <div class="progress-header">
+              <div>
+                <h2>Thanh tiến trình</h2>
+                <p id="progressStatus">Chưa có tác vụ</p>
+              </div>
+
+              <strong id="progressPercent">0%</strong>
+            </div>
+
+            <div class="progress-track">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+          </div>
+
+          <!-- Xem trước -->
+          <div class="panel preview-panel">
+            <div class="panel-heading preview-heading">
+              <div>
+                <span class="step-number">03</span>
+                <h2>Xem trước kết quả</h2>
+              </div>
+
+              <div class="preview-toolbar">
+                <input
+                  id="previewSearch"
+                  class="search-input"
+                  type="search"
+                  placeholder="Tìm trong kết quả..."
+                />
+
+                <select id="previewLimit" class="preview-limit">
+                  <option value="10">Hiện 10 file</option>
+                  <option value="20">Hiện 20 file</option>
+                  <option value="50">Hiện 50 file</option>
+                  <option value="all">Hiện tất cả</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="previewContainer" class="preview-container">
+              <div class="empty-state">
+                <div class="empty-state-icon">👁</div>
+                <strong>Chưa có dữ liệu xem trước</strong>
+                <p>Chọn file TXT và nhấn “Xử lý và xem trước”.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nhật ký -->
+          <div class="panel">
+            <div class="panel-heading log-heading">
+              <div>
+                <span class="step-number">04</span>
+                <h2>Nhật ký xử lý</h2>
+              </div>
+
+              <button id="clearLogBtn" class="text-button" type="button">
+                Xóa nhật ký
+              </button>
+            </div>
+
+            <div id="logContainer" class="log-container"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

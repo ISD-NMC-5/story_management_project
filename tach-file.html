@@ -42,12 +42,16 @@
 
                 <div class="ghep-tach-config">
                     <div class="ghep-tach-field">
-                        <label for="split-regex">Regex tách chương:</label>
-                        <input type="text" id="split-regex" value="^(Chương|Chapter|Hồi|Quyển)\s+\d+" placeholder="VD: ^Chương\s+\d+">
+                        <label for="split-word-limit">Giới hạn số từ mỗi file:</label>
+                        <input type="number" id="split-word-limit" value="50000" min="100" placeholder="VD: 50000">
                     </div>
                     <div class="ghep-tach-field">
-                        <label for="split-prefix">Tiền tố tên file xuất:</label>
-                        <input type="text" id="split-prefix" value="" placeholder="Tự lấy từ tiêu đề chương">
+                        <label for="split-keywords">Từ khóa chương nhận diện (cách nhau bởi dấu phẩy):</label>
+                        <input type="text" id="split-keywords" value="Chương, Chap, Chapter, 第, 卷, Quyển" placeholder="VD: Chương, Chap, Chapter">
+                    </div>
+                    <div class="ghep-tach-field">
+                        <label for="split-prefix">Tiền tố tên file (ví dụ: TQ_):</label>
+                        <input type="text" id="split-prefix" value="" placeholder="Mặc định: không có tiền tố">
                     </div>
                 </div>
 
