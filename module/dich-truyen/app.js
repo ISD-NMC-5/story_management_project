@@ -16,11 +16,11 @@ const CONFIG = {
 };
 
 const DEFAULT_PRIORITY = {
-  chinesephienamwords: 10,
-  vietphrase: 20,
-  pronouns: 30,
-  names: 40,
-  luatnhan: 50,
+  luatnhan: 1,
+  pronouns: 2,
+  chinesephienamwords: 3,
+  vietphrase: 4,
+  names: 5,
 };
 
 const state = {
