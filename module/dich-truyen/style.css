@@ -972,3 +972,19 @@ textarea.preview.translated {
     align-items: center;
 }
 
+.dict-card {
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.dict-card.dragging {
+    opacity: 0.4;
+    border: 2px dashed #0284c7;
+    background: #f0f9ff;
+}
+
+.dict-card.drag-over {
+    border-color: #0284c7;
+    background-color: #e0f2fe;
+    transform: scale(1.01);
+}
+

@@ -900,18 +900,24 @@
     }
 
     const ADVANCED_CHAPTER_PATTERNS = [
-        /Chương\s+\d+/i,
-        /第\s*\d+\s*章/,
-        /第.+章/,
-        /Chapter\s+\d+/i
+        /(?:Chương|Chapter|Hồi|Tiết|Quyển|Tập|Mục)\s*[\d\w\.\-]+/i,
+        /第\s*[\d一二三四五六七八九十百千万\.]+\s*[章回卷节]/,
+        /第.+[章回卷节]/,
+        /(?:Chương|Chapter)\s+[IVXLCDM]+/i,
+        /^\s*[\d\.]+\s*[:\-\s]/,
+        /^\s*【[^】]+】/,
+        /^\s*\[[^\]]+\]/
     ];
 
-    function parseChapterFile(text) {
+    function parseChapterFile(text, filename) {
         const lines = text.split('\n');
         let titleLine = null;
         let titleIndex = -1;
+        
+        // 1. Quét tìm dòng trùng regex tiêu đề chương
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
+            if (!line) continue;
             const isMatch = ADVANCED_CHAPTER_PATTERNS.some(regex => regex.test(line));
             if (isMatch) {
                 titleLine = line;
@@ -919,9 +925,28 @@
                 break;
             }
         }
+        
+        // 2. Nếu không tìm thấy bằng Regex, lấy dòng đầu tiên có nội dung (non-empty line)
         if (titleIndex === -1) {
-            return null; // Discard
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line) {
+                    titleLine = line;
+                    titleIndex = i;
+                    break;
+                }
+            }
         }
+
+        // 3. Fallback cuối cùng: Nếu file hoàn toàn trống hoặc không có dòng chữ nào, dùng tên file làm tiêu đề
+        if (titleIndex === -1) {
+            const fallbackTitle = filename ? stripExt(filename) : 'Chương không tên';
+            return {
+                title: fallbackTitle,
+                content: (text || '').trim()
+            };
+        }
+
         const contentLines = lines.slice();
         contentLines.splice(titleIndex, 1);
         const content = contentLines.join('\n').trim();
@@ -985,7 +1010,7 @@
                     let skippedCount = 0;
 
                     files.forEach(f => {
-                        const parsed = parseChapterFile(f.text);
+                        const parsed = parseChapterFile(f.text, f.name);
                         if (parsed) {
                             validChapters.push(`${parsed.title}\n\n${parsed.content}`);
                             successfullyMergedIds.add(f.id);
@@ -1135,7 +1160,7 @@
 
                 const validChapters = [];
                 files.forEach(f => {
-                    const parsed = parseChapterFile(f.text);
+                    const parsed = parseChapterFile(f.text, f.name);
                     if (parsed) {
                         validChapters.push(`${parsed.title}\n\n${parsed.content}`);
                     }

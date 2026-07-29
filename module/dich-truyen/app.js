@@ -381,7 +381,9 @@ function sortDictionaries() {
 
 async function persistDictionaries() {
   await idbClear(CONFIG.stores.dictionaries);
-  sortDictionaries();
+  state.dictionaries.forEach((item, index) => {
+    item.priority = index + 1;
+  });
   for (const dictionary of state.dictionaries) {
     await idbPut(CONFIG.stores.dictionaries, dictionary);
   }
@@ -389,12 +391,12 @@ async function persistDictionaries() {
 
 async function restoreDictionaries() {
   state.dictionaries = await idbGetAll(CONFIG.stores.dictionaries);
-  sortDictionaries();
+  state.dictionaries.sort((a, b) => (a.priority || 0) - (b.priority || 0));
 }
 
 function getDictionaryVersionHash() {
   if (!state.dictionaries.length) return "none";
-  const names = state.dictionaries.map(d => `${d.name}:${d.size}`).join("|");
+  const names = state.dictionaries.map(d => `${d.name}:${d.size}:${d.priority}`).join("|");
   let hash = 0;
   for (let i = 0; i < names.length; i++) {
     hash = (hash << 5) - hash + names.charCodeAt(i);
@@ -404,7 +406,6 @@ function getDictionaryVersionHash() {
 }
 
 function updateDictionaryUi() {
-  sortDictionaries();
   const totalBytes = state.dictionaries.reduce(
     (sum, item) => sum + (item.size || 0),
     0,
@@ -423,15 +424,60 @@ function updateDictionaryUi() {
     return;
   }
 
+  let draggedIndex = null;
+
   state.dictionaries.forEach((item, index) => {
     const card = document.createElement("div");
     card.className = "dict-card";
+    if (!state.translating) {
+      card.setAttribute("draggable", "true");
+      card.style.cursor = "grab";
+    }
+
+    card.addEventListener("dragstart", (e) => {
+      draggedIndex = index;
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", index);
+    });
+
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      document.querySelectorAll(".dict-card").forEach(c => c.classList.remove("drag-over"));
+    });
+
+    card.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (draggedIndex !== null && draggedIndex !== index) {
+        card.classList.add("drag-over");
+      }
+      e.dataTransfer.dropEffect = "move";
+    });
+
+    card.addEventListener("dragleave", () => {
+      card.classList.remove("drag-over");
+    });
+
+    card.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      card.classList.remove("drag-over");
+      if (draggedIndex === null || draggedIndex === index) return;
+      
+      const movedItem = state.dictionaries.splice(draggedIndex, 1)[0];
+      state.dictionaries.splice(index, 0, movedItem);
+      draggedIndex = null;
+      
+      await persistDictionaries();
+      updateDictionaryUi();
+      log("Đã cập nhật thứ tự ưu tiên từ điển bằng kéo thả.");
+    });
+
     const top = document.createElement("div");
     top.className = "dict-top";
     const info = document.createElement("div");
     const name = document.createElement("div");
     name.className = "dict-name";
-    name.textContent = item.name;
+    name.innerHTML = `<span style="user-select:none; margin-right:6px; opacity:0.6; cursor:grab;">☰</span>${item.name}`;
     const meta = document.createElement("div");
     meta.className = "dict-meta";
     meta.textContent = `${formatBytes(item.size)} · ${dictionaryKind(item.name)}`;
@@ -469,7 +515,6 @@ function updateDictionaryUi() {
 }
 
 async function moveDictionary(id, direction) {
-  sortDictionaries();
   const index = state.dictionaries.findIndex((item) => item.id === id);
   const target = index + direction;
   if (index < 0 || target < 0 || target >= state.dictionaries.length) return;
@@ -1268,7 +1313,6 @@ function translationWorkerMain() {
 
     let finalOutput = cleanupSpacing(output, true);
 
-    // Custom remembered rules replacement
     if (Array.isArray(settings.customRules) && settings.customRules.length > 0) {
       for (const cr of settings.customRules) {
         if (cr.findText && cr.replaceText) {
