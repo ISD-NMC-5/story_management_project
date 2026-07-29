@@ -12,8 +12,7 @@
         <div>
           <h1>📖 Dịch truyện TXT Trung → Việt</h1>
           <p>
-            Chạy hoàn toàn offline, dùng từ điển cá nhân, chỉ lấy một nghĩa đầu
-            tiên, ưu tiên cụm dài và tự động chống dính từ tiếng Việt.
+            Chạy hoàn toàn offline, dùng từ điển cá nhân, quản lý truyện, chỉnh sửa linh hoạt và thống kê chất lượng bản dịch.
           </p>
         </div>
         <div class="offline">● Offline</div>
@@ -146,7 +145,15 @@
             <div class="panel-head"><h2>4. Xuất kết quả</h2></div>
             <div class="panel-body">
               <div class="field">
-                <label for="exportName">Tên tệp xuất</label>
+                <label for="exportFormat">Định dạng xuất</label>
+                <select id="exportFormat">
+                  <option value="zip">📦 Gói ZIP (Tách riêng các file .txt)</option>
+                  <option value="single">📄 Ghép thành 1 file duy nhất</option>
+                  <option value="individual">📥 Tải xuống từng file TXT riêng lẻ</option>
+                </select>
+              </div>
+              <div class="field" id="exportNameContainer" style="display:none;">
+                <label for="exportName">Tên tệp ghép</label>
                 <input id="exportName" type="text" value="truyen-viet.txt" />
               </div>
               <div class="btn-row">
@@ -249,26 +256,109 @@
             </div>
           </section>
 
+          <!-- SỬA BẢN DỊCH SAU KHỊ DỊCH -->
           <section class="panel">
-            <div class="panel-head"><h2>Xem trước</h2></div>
-            <div class="toolbar">
-              <label for="jumpChunk">Khối:</label>
-              <input id="jumpChunk" type="number" min="1" value="1" />
-              <button id="jumpButton" class="btn light" type="button">
-                Đi tới
-              </button>
-              <button id="prevButton" class="btn light" type="button">
-                ← Trước
-              </button>
-              <button id="nextButton" class="btn light" type="button">
-                Sau →
-              </button>
-              <span id="previewPosition" class="position">Chưa có dữ liệu</span>
+            <div class="panel-head">
+              <h2>📖 Sửa bản dịch sau khi dịch</h2>
+              <div id="editStoryTitle" style="font-size:0.9rem; font-weight:bold; color:var(--primary);">
+                Truyện: —
+              </div>
             </div>
-            <div class="preview-grid">
+            <div class="panel-body">
+              <div class="search-replace-box">
+                <div class="search-row">
+                  <div class="field flex-1">
+                    <label for="findInput">Tìm kiếm (từ / cụm từ cần sửa)</label>
+                    <input id="findInput" type="text" placeholder="Nhập từ/cụm từ cần sửa..." />
+                  </div>
+                  <div class="field flex-1">
+                    <label for="replaceInput">Đổi thành</label>
+                    <input id="replaceInput" type="text" placeholder="Nhập từ thay thế..." />
+                  </div>
+                </div>
+
+                <div id="findResultBox" class="find-result-box" style="display:none;">
+                  <div class="find-count-line">
+                    <span id="findMatchCount">Tìm thấy: 0 lần</span>
+                    <span id="findCurrentIndexInfo" style="color:var(--muted); font-size:0.85rem;"></span>
+                  </div>
+                  <div class="mode-options">
+                    <label class="radio-label">
+                      <input type="radio" name="replaceScope" value="all" checked />
+                      <span>☑ Thay tất cả <strong id="radioMatchCount">(0 lần)</strong></span>
+                    </label>
+                    <label class="radio-label">
+                      <input type="radio" name="replaceScope" value="single" />
+                      <span>☐ Chỉ sửa lần đang chọn (khối hiện tại)</span>
+                    </label>
+                  </div>
+                  <div class="remember-option" style="margin-top:6px;">
+                    <label class="check">
+                      <input id="rememberRuleCheck" type="checkbox" />
+                      <span>☑ Ghi nhớ quy tắc này (Lần sau dịch truyện khác, tự động áp dụng)</span>
+                    </label>
+                  </div>
+                  <div class="btn-row" style="margin-top:12px;">
+                    <button id="doReplaceBtn" class="btn primary" type="button">[ Thay thế ]</button>
+                    <button id="undoReplaceBtn" class="btn warning" type="button" disabled>[ Hoàn tác ]</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- XEM TRƯỚC VÀ PHÂN TÍCH THEO CÂU -->
+          <section class="panel">
+            <div class="panel-head">
+              <h2>Xem trước & Phân tích</h2>
+              <div class="toolbar">
+                <label for="jumpChunk">Khối:</label>
+                <input id="jumpChunk" type="number" min="1" value="1" style="width:65px;" />
+                <button id="jumpButton" class="btn light" type="button">Đi tới</button>
+                <button id="prevButton" class="btn light" type="button">← Khối trước</button>
+                <button id="nextButton" class="btn light" type="button">Khối sau →</button>
+                <span id="previewPosition" class="position">Chưa có dữ liệu</span>
+              </div>
+            </div>
+
+            <!-- CHẾ ĐỘ PREVIEW CÂU (SENTENCE MODE) -->
+            <div class="panel-body" style="border-bottom: 1px solid var(--line); background:#fafbfc;">
+              <div class="sentence-nav-toolbar">
+                <button id="prevSentenceBtn" class="btn light" type="button">← Câu trước</button>
+                <span id="sentencePositionInfo" style="font-weight:700; color:var(--primary);">Câu 0 / 0</span>
+                <button id="nextSentenceBtn" class="btn light" type="button">Câu sau →</button>
+              </div>
+
+              <div class="sentence-preview-grid">
+                <div class="preview-col">
+                  <div class="preview-title">
+                    <span>Văn bản gốc</span>
+                  </div>
+                  <div id="sentenceSourceBox" class="sentence-display-box">Chưa có câu</div>
+                </div>
+                <div class="preview-col">
+                  <div class="preview-title">
+                    <span>Bản dịch</span>
+                  </div>
+                  <div id="sentenceTranslatedBox" class="sentence-display-box translated">Chưa có câu</div>
+                </div>
+              </div>
+
+              <div class="analysis-panel" style="margin-top:12px;">
+                <div class="preview-title">
+                  <span>Phân tích câu (Từ gốc → Từ dịch)</span>
+                </div>
+                <div id="sentenceAnalysisList" class="sentence-analysis-list">
+                  Chưa có dữ liệu phân tích câu.
+                </div>
+              </div>
+            </div>
+
+            <!-- TOÀN BỘ KHỐI TEXTAREA -->
+            <div class="preview-grid" style="padding:16px;">
               <div class="preview-col">
                 <div class="preview-title">
-                  <span>Văn bản gốc</span><span id="sourceCount">0 ký tự</span>
+                  <span>Văn bản gốc (Toàn khối)</span><span id="sourceCount">0 ký tự</span>
                 </div>
                 <textarea
                   id="sourcePreview"
@@ -279,7 +369,7 @@
               </div>
               <div class="preview-col">
                 <div class="preview-title">
-                  <span>Bản dịch</span><span id="translatedCount">0 ký tự</span>
+                  <span>Bản dịch (Toàn khối)</span><span id="translatedCount">0 ký tự</span>
                 </div>
                 <textarea
                   id="translatedPreview"
@@ -289,15 +379,54 @@
                 ></textarea>
               </div>
             </div>
-            <div class="analysis-panel">
-              <div class="preview-title">
-                <span>Dịch từng từ / cụm</span><span id="analysisCount">0 mục</span>
-              </div>
-              <div id="analysisList" class="analysis-list">
-                Chưa có dữ liệu phân tích.
-              </div>
-            </div>
           </section>
+
+          <!-- THỐNG KÊ TỪ KHÔNG DỊCH ĐƯỢC & KIỂM TRA CHẤT LƯỢNG -->
+          <div class="grid-2-col">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>🔍 Thống kê từ chưa dịch (Chữ Trung)</h2>
+              </div>
+              <div class="panel-body">
+                <div class="btn-row" style="margin-bottom:10px;">
+                  <button id="exportUntranslatedBtn" class="btn light" type="button">📥 [Xuất danh sách chưa dịch]</button>
+                  <button id="addToVietphraseBtn" class="btn primary" type="button">➕ [Thêm vào VietPhrase]</button>
+                </div>
+                <div id="untranslatedList" class="untranslated-list">
+                  Chưa có dữ liệu thống kê.
+                </div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>⚠ Kiểm tra chất lượng bản dịch</h2>
+              </div>
+              <div class="panel-body">
+                <div class="qa-stats">
+                  <div class="qa-item">
+                    <span>Câu còn chữ Trung:</span>
+                    <strong id="qaChineseCount">0</strong>
+                  </div>
+                  <div class="qa-item">
+                    <span>Câu trống:</span>
+                    <strong id="qaEmptyCount">0</strong>
+                  </div>
+                  <div class="qa-item">
+                    <span>Ký tự bất thường ():</span>
+                    <strong id="qaAbnormalCount">0</strong>
+                  </div>
+                  <div class="qa-item">
+                    <span>Dòng quá dài (&gt;500 char):</span>
+                    <strong id="qaLongLineCount">0</strong>
+                  </div>
+                </div>
+                <div style="margin-top:12px;">
+                  <button id="nextErrorBtn" class="btn warning full" type="button">🔍 [Nhảy tới lỗi tiếp theo]</button>
+                </div>
+              </div>
+            </section>
+          </div>
 
           <section class="panel">
             <div class="panel-head">
@@ -311,6 +440,8 @@
         </section>
       </main>
     </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

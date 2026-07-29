@@ -2,9 +2,9 @@
 
 const CONFIG = {
   dbName: "OfflineChineseVietnameseTranslatorV2",
-  dbVersion: 3,
+  dbVersion: 4,
   previewLimit: 80000,
-  analysisLimit: 0,
+  analysisLimit: 500, // Enable sentence/phrase trace up to 500
   previewRefreshEvery: 5,
   stores: {
     metadata: "metadata",
@@ -12,6 +12,7 @@ const CONFIG = {
     source: "sourceChunks",
     translated: "translatedChunks",
     dictionaries: "dictionaryFiles",
+    customRules: "customRules", // Remembered edit rules
   },
 };
 
@@ -36,6 +37,12 @@ const state = {
   activeStoryId: "",
   translatingStoryId: "",
   dictionaries: [],
+  customRules: [],
+  undoStack: [], // Undo stack for translation replace edits
+  sentences: [], // Parsed sentences for active preview chunk
+  currentSentenceIndex: 0,
+  untranslatedStats: [], // List of { word, count }
+  qaIssues: { chinese: 0, empty: 0, abnormal: 0, longLine: 0, errorList: [] },
   metadata: createEmptyMetadata(),
 };
 
@@ -61,6 +68,8 @@ const ui = {
   normalizePunctuation: document.getElementById("normalizePunctuation"),
   keepUnknown: document.getElementById("keepUnknown"),
   capitalizeSentences: document.getElementById("capitalizeSentences"),
+  exportFormat: document.getElementById("exportFormat"),
+  exportNameContainer: document.getElementById("exportNameContainer"),
   exportName: document.getElementById("exportName"),
   exportButton: document.getElementById("exportButton"),
   exportClearButton: document.getElementById("exportClearButton"),
@@ -86,10 +95,37 @@ const ui = {
   translatedPreview: document.getElementById("translatedPreview"),
   sourceCount: document.getElementById("sourceCount"),
   translatedCount: document.getElementById("translatedCount"),
-  analysisList: document.getElementById("analysisList"),
-  analysisCount: document.getElementById("analysisCount"),
   logBox: document.getElementById("logBox"),
   clearLogButton: document.getElementById("clearLogButton"),
+
+  // New UI elements
+  editStoryTitle: document.getElementById("editStoryTitle"),
+  findInput: document.getElementById("findInput"),
+  replaceInput: document.getElementById("replaceInput"),
+  findResultBox: document.getElementById("findResultBox"),
+  findMatchCount: document.getElementById("findMatchCount"),
+  findCurrentIndexInfo: document.getElementById("findCurrentIndexInfo"),
+  radioMatchCount: document.getElementById("radioMatchCount"),
+  rememberRuleCheck: document.getElementById("rememberRuleCheck"),
+  doReplaceBtn: document.getElementById("doReplaceBtn"),
+  undoReplaceBtn: document.getElementById("undoReplaceBtn"),
+
+  prevSentenceBtn: document.getElementById("prevSentenceBtn"),
+  nextSentenceBtn: document.getElementById("nextSentenceBtn"),
+  sentencePositionInfo: document.getElementById("sentencePositionInfo"),
+  sentenceSourceBox: document.getElementById("sentenceSourceBox"),
+  sentenceTranslatedBox: document.getElementById("sentenceTranslatedBox"),
+  sentenceAnalysisList: document.getElementById("sentenceAnalysisList"),
+
+  exportUntranslatedBtn: document.getElementById("exportUntranslatedBtn"),
+  addToVietphraseBtn: document.getElementById("addToVietphraseBtn"),
+  untranslatedList: document.getElementById("untranslatedList"),
+
+  qaChineseCount: document.getElementById("qaChineseCount"),
+  qaEmptyCount: document.getElementById("qaEmptyCount"),
+  qaAbnormalCount: document.getElementById("qaAbnormalCount"),
+  qaLongLineCount: document.getElementById("qaLongLineCount"),
+  nextErrorBtn: document.getElementById("nextErrorBtn"),
 };
 
 function createEmptyMetadata() {
@@ -110,14 +146,6 @@ function openDatabase() {
       if (!db.objectStoreNames.contains(CONFIG.stores.metadata)) {
         db.createObjectStore(CONFIG.stores.metadata, { keyPath: "key" });
       }
-      if (event.oldVersion < 3) {
-        if (db.objectStoreNames.contains(CONFIG.stores.source)) {
-          db.deleteObjectStore(CONFIG.stores.source);
-        }
-        if (db.objectStoreNames.contains(CONFIG.stores.translated)) {
-          db.deleteObjectStore(CONFIG.stores.translated);
-        }
-      }
       if (!db.objectStoreNames.contains(CONFIG.stores.stories)) {
         db.createObjectStore(CONFIG.stores.stories, { keyPath: "id" });
       }
@@ -125,14 +153,13 @@ function openDatabase() {
         db.createObjectStore(CONFIG.stores.source, { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains(CONFIG.stores.translated)) {
-        db.createObjectStore(CONFIG.stores.translated, {
-          keyPath: "id",
-        });
+        db.createObjectStore(CONFIG.stores.translated, { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains(CONFIG.stores.dictionaries)) {
-        db.createObjectStore(CONFIG.stores.dictionaries, {
-          keyPath: "id",
-        });
+        db.createObjectStore(CONFIG.stores.dictionaries, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(CONFIG.stores.customRules)) {
+        db.createObjectStore(CONFIG.stores.customRules, { keyPath: "id" });
       }
     };
 
@@ -183,39 +210,6 @@ function idbDelete(name, key) {
     const request = store(name, "readwrite").delete(key);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
-  });
-}
-
-function compactStoredAnalysis() {
-  if (CONFIG.analysisLimit) return Promise.resolve(0);
-  return new Promise((resolve, reject) => {
-    let cleaned = 0;
-    const transaction = state.db.transaction(CONFIG.stores.translated, "readwrite");
-    const objectStore = transaction.objectStore(CONFIG.stores.translated);
-    const request = objectStore.openCursor();
-
-    request.onsuccess = (event) => {
-      const cursor = event.target.result;
-      if (!cursor) return;
-      const value = cursor.value;
-      if (
-        value &&
-        (Object.prototype.hasOwnProperty.call(value, "trace") ||
-          Object.prototype.hasOwnProperty.call(value, "traceTruncated"))
-      ) {
-        delete value.trace;
-        delete value.traceTruncated;
-        const updateRequest = cursor.update(value);
-        updateRequest.onsuccess = () => cursor.continue();
-        updateRequest.onerror = () => reject(updateRequest.error);
-        cleaned++;
-        return;
-      }
-      cursor.continue();
-    };
-    request.onerror = () => reject(request.error);
-    transaction.oncomplete = () => resolve(cleaned);
-    transaction.onerror = () => reject(transaction.error);
   });
 }
 
@@ -304,6 +298,7 @@ async function restoreMetadata() {
       story.status = "paused";
     }
     story.selected = story.selected !== false;
+    story.dictVersion = story.dictVersion || "goc";
   });
   state.metadata.activeStoryId =
     saved.activeStoryId || state.metadata.stories[0]?.id || "";
@@ -311,6 +306,10 @@ async function restoreMetadata() {
     ? Math.max(0, activeStory().currentChunk - 1)
     : 0;
   await persistStories();
+}
+
+async function restoreCustomRules() {
+  state.customRules = await idbGetAll(CONFIG.stores.customRules);
 }
 
 function formatBytes(bytes) {
@@ -393,6 +392,17 @@ async function restoreDictionaries() {
   sortDictionaries();
 }
 
+function getDictionaryVersionHash() {
+  if (!state.dictionaries.length) return "none";
+  const names = state.dictionaries.map(d => `${d.name}:${d.size}`).join("|");
+  let hash = 0;
+  for (let i = 0; i < names.length; i++) {
+    hash = (hash << 5) - hash + names.charCodeAt(i);
+    hash |= 0;
+  }
+  return `v${Math.abs(hash)}`;
+}
+
 function updateDictionaryUi() {
   sortDictionaries();
   const totalBytes = state.dictionaries.reduce(
@@ -400,7 +410,7 @@ function updateDictionaryUi() {
     0,
   );
   ui.dictSummary.textContent = state.dictionaries.length
-    ? `${state.dictionaries.length} tệp · ${formatBytes(totalBytes)} · ưu tiên thấp ở trên, cao ở dưới`
+    ? `${state.dictionaries.length} tệp · ${formatBytes(totalBytes)} · Phiên bản: #${getDictionaryVersionHash()}`
     : "Chưa có từ điển.";
   ui.dictList.innerHTML = "";
 
@@ -490,6 +500,7 @@ function updateStoryUi() {
   ui.storyList.innerHTML = "";
   if (!state.metadata.stories.length) {
     ui.storyInfo.classList.remove("show");
+    ui.editStoryTitle.textContent = "Truyện: —";
     const empty = document.createElement("div");
     empty.className = "story-empty";
     empty.textContent = "Chưa có truyện nào. Hãy chọn một hoặc nhiều tệp TXT.";
@@ -529,6 +540,21 @@ function updateStoryUi() {
     const name = document.createElement("span");
     name.className = "story-title";
     name.textContent = story.fileName;
+
+    const statusBadge = document.createElement("span");
+    const st = story.status || "idle";
+    const statusLabels = {
+      idle: "Chưa dịch",
+      ready: "Chưa dịch",
+      translating: "Đang dịch",
+      paused: "Tạm dừng",
+      completed: "Hoàn thành",
+      error: "Lỗi",
+    };
+    statusBadge.className = `story-status-badge status-${st}`;
+    statusBadge.textContent = statusLabels[st] || st;
+    name.appendChild(statusBadge);
+
     const meta = document.createElement("span");
     meta.className = "story-meta";
     const percent = story.totalChunks
@@ -537,22 +563,54 @@ function updateStoryUi() {
     meta.textContent = `${percent.toFixed(1)}% · ${story.currentChunk}/${story.totalChunks} khối · ${formatBytes(story.fileSize)}`;
     main.append(name, meta);
 
+    const actions = document.createElement("div");
+    actions.className = "story-card-actions";
+
+    if (story.currentChunk > 0) {
+      const retransBtn = document.createElement("button");
+      retransBtn.type = "button";
+      retransBtn.className = "btn light";
+      retransBtn.style.padding = "4px 8px";
+      retransBtn.style.fontSize = "11px";
+      retransBtn.textContent = "Dịch lại";
+      retransBtn.disabled = state.translating || state.importing;
+      retransBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (confirm(`Dịch lại truyện "${story.fileName}" từ đầu?`)) {
+          story.currentChunk = 0;
+          story.translatedBytes = 0;
+          story.translatedLines = 0;
+          story.status = "ready";
+          await persistStories();
+          refreshUi();
+          await showPreview(0, story.id);
+        }
+      });
+      actions.appendChild(retransBtn);
+    }
+
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "btn danger story-delete";
     remove.textContent = "Xóa";
     remove.disabled = state.translating || state.importing;
-    remove.addEventListener("click", () => deleteStory(story.id));
+    remove.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteStory(story.id);
+    });
+    actions.appendChild(remove);
 
-    item.append(check, main, remove);
+    item.append(check, main, actions);
     ui.storyList.appendChild(item);
   });
 
   if (!data) {
     ui.storyInfo.classList.remove("show");
+    ui.editStoryTitle.textContent = "Truyện: —";
     return;
   }
   ui.storyInfo.classList.add("show");
+  ui.editStoryTitle.textContent = `Truyện: ${data.fileName}`;
   ui.storyName.textContent = data.fileName;
   ui.storySize.textContent = formatBytes(data.fileSize);
   ui.storyLines.textContent = Number(data.totalLines || 0).toLocaleString(
@@ -738,7 +796,8 @@ async function importSingleStory(file) {
     translatedBytes: 0,
     translatedLines: 0,
     selected: true,
-    status: "importing",
+    status: "ready",
+    dictVersion: getDictionaryVersionHash(),
     startedAt: null,
     completedAt: null,
     addedAt: Date.now(),
@@ -844,11 +903,6 @@ async function deleteStory(storyId) {
   log(`Đã xóa truyện ${story.fileName}.`);
 }
 
-/*
- * Worker được tạo từ chính thân hàm JavaScript. Cách này tránh việc phải
- * nhúng regex vào template literal, nên không phát sinh lỗi
- * "Invalid regular expression: missing /" do sai cấp escape.
- */
 function translationWorkerMain() {
   "use strict";
 
@@ -863,22 +917,25 @@ function translationWorkerMain() {
     self.postMessage({ type, ...payload });
   }
 
-  function firstMeaning(value) {
+  function parseAllMeanings(value) {
     const normalized = String(value || "")
       .replace(/\u00a0/g, " ")
       .replace(/[ \t]+/g, " ")
       .trim();
-    if (!normalized) return "";
-    const selected =
-      normalized
-        .split(/[\/／]/u)
-        .map((item) => item.trim())
-        .find(Boolean) || "";
-    return selected.replace(/^[,;:|]+|[,;:|]+$/g, "").trim();
+    if (!normalized) return { first: "", all: [] };
+    const rawList = normalized
+      .split(/[\/／]/u)
+      .map((item) => item.replace(/^[,;:|]+|[,;:|]+$/g, "").trim())
+      .filter(Boolean);
+    const uniqueList = Array.from(new Set(rawList));
+    return {
+      first: uniqueList[0] || "",
+      all: uniqueList,
+    };
   }
 
   function parseLine(rawLine) {
-    const line = rawLine.trim();
+    const line = String(rawLine || "").normalize("NFC").trim();
     if (!line || line.startsWith("#") || line.startsWith("//")) return null;
     let separatorIndex = -1;
     let separatorLength = 1;
@@ -894,8 +951,10 @@ function translationWorkerMain() {
     else if (pipe > 0) separatorIndex = pipe;
     if (separatorIndex <= 0) return null;
     const source = line.slice(0, separatorIndex).trim();
-    const target = firstMeaning(line.slice(separatorIndex + separatorLength));
-    return source && target ? { source, target } : null;
+    const meanings = parseAllMeanings(line.slice(separatorIndex + separatorLength));
+    const target = meanings.first;
+    const allTargets = meanings.all;
+    return source && target ? { source, target, allTargets } : null;
   }
 
   function firstCodePoint(text, index = 0) {
@@ -917,14 +976,14 @@ function translationWorkerMain() {
     return first.length === text.length;
   }
 
-  function addGroupedEntry(source, target) {
+  function addGroupedEntry(source, target, allTargets = []) {
     if (isOneCodePoint(source)) {
-      singleMap.set(source, target);
+      singleMap.set(source, { target, allTargets });
       return;
     }
     const key = firstTwoKey(source, 0);
     if (!phraseGroups.has(key)) phraseGroups.set(key, []);
-    phraseGroups.get(key).push([source, target]);
+    phraseGroups.get(key).push({ source, target, allTargets });
   }
 
   function addRule(source, target) {
@@ -977,19 +1036,28 @@ function translationWorkerMain() {
     const key = firstTwoKey(text, index);
     const group = phraseGroups.get(key);
     if (group) {
-      for (const [source, target] of group) {
-        if (text.startsWith(source, index))
-          return { consumed: source.length, source, target, kind: "Cụm từ" };
+      for (const item of group) {
+        if (text.startsWith(item.source, index))
+          return {
+            consumed: item.source.length,
+            source: item.source,
+            target: item.target,
+            allTargets: item.allTargets,
+            kind: "Cụm từ",
+          };
       }
     }
     const first = firstCodePoint(text, index);
-    if (singleMap.has(first.char))
+    if (singleMap.has(first.char)) {
+      const item = singleMap.get(first.char);
       return {
         consumed: first.length,
         source: first.char,
-        target: singleMap.get(first.char),
+        target: item.target,
+        allTargets: item.allTargets,
         kind: "Từ đơn",
       };
+    }
     return null;
   }
 
@@ -1159,7 +1227,7 @@ function translationWorkerMain() {
     let output = "";
     let index = 0;
     const trace = [];
-    const traceLimit = Number(options.traceLimit) || 0;
+    const traceLimit = Number(options.traceLimit) || 500;
 
     while (index < text.length) {
       const exact = findExact(text, index);
@@ -1174,6 +1242,7 @@ function translationWorkerMain() {
           trace.push({
             source: selected.source || text.slice(index, index + selected.consumed),
             target: selected.target,
+            allTargets: selected.allTargets || [selected.target],
             kind: selected.kind || "Từ điển",
           });
         }
@@ -1196,8 +1265,20 @@ function translationWorkerMain() {
 
     if (settings.normalizePunctuation)
       output = normalizeChinesePunctuation(output);
+
+    let finalOutput = cleanupSpacing(output, true);
+
+    // Custom remembered rules replacement
+    if (Array.isArray(settings.customRules) && settings.customRules.length > 0) {
+      for (const cr of settings.customRules) {
+        if (cr.findText && cr.replaceText) {
+          finalOutput = finalOutput.split(cr.findText).join(cr.replaceText);
+        }
+      }
+    }
+
     return {
-      text: cleanupSpacing(output, true),
+      text: finalOutput,
       trace,
       traceTruncated: !!traceLimit && trace.length >= traceLimit,
     };
@@ -1222,7 +1303,7 @@ function translationWorkerMain() {
         if (!entry) continue;
         if (entry.source.includes("{0}"))
           ruleMap.set(entry.source, entry.target);
-        else exactMap.set(entry.source, entry.target);
+        else exactMap.set(entry.source, { target: entry.target, allTargets: entry.allTargets });
         valid++;
         processedLines++;
         if (processedLines % 50000 === 0) {
@@ -1250,8 +1331,8 @@ function translationWorkerMain() {
     suffixRules = new Map();
 
     let grouped = 0;
-    for (const [source, target] of exactMap) {
-      addGroupedEntry(source, target);
+    for (const [source, entryVal] of exactMap) {
+      addGroupedEntry(source, entryVal.target, entryVal.allTargets);
       grouped++;
       if (grouped % 50000 === 0) {
         post("dictionary-index", { grouped, total: exactMap.size });
@@ -1259,7 +1340,7 @@ function translationWorkerMain() {
       }
     }
     for (const group of phraseGroups.values()) {
-      group.sort((a, b) => b[0].length - a[0].length);
+      group.sort((a, b) => b.source.length - a.source.length);
     }
     for (const [source, target] of ruleMap) addRule(source, target);
     for (const rules of prefixRules.values())
@@ -1287,7 +1368,7 @@ function translationWorkerMain() {
       if (data.type === "translate") {
         const started = performance.now();
         const translated = translateText(data.text, {
-          traceLimit: data.traceLimit || 0,
+          traceLimit: data.traceLimit || 500,
         });
         const translatedText = translated.text;
         post("translated", {
@@ -1340,6 +1421,7 @@ function translationSettings() {
     normalizePunctuation: ui.normalizePunctuation.checked,
     keepUnknown: ui.keepUnknown.checked,
     capitalizeSentences: ui.capitalizeSentences.checked,
+    customRules: state.customRules,
   };
 }
 
@@ -1451,8 +1533,11 @@ async function startTranslation() {
   state.translating = true;
   state.paused = false;
   state.metadata.status = "initializing";
+  const currentDictVer = getDictionaryVersionHash();
+
   for (const story of queue) {
     story.status = "initializing";
+    story.dictVersion = currentDictVer;
     if (!story.startedAt) story.startedAt = new Date().toISOString();
   }
   await persistStories();
@@ -1557,6 +1642,7 @@ async function startTranslation() {
     destroyWorker();
     refreshUi();
     await updateStorage();
+    await updateUntranslatedAndQA();
   }
 }
 
@@ -1579,51 +1665,98 @@ async function pauseTranslation() {
   );
 }
 
-function renderAnalysis(trace = [], truncated = false) {
-  ui.analysisList.innerHTML = "";
-  if (!CONFIG.analysisLimit) {
-    ui.analysisCount.textContent = "Tắt";
-    ui.analysisList.textContent =
-      "Đã tắt phân tích từng từ/cụm để giảm dung lượng lưu và tránh lag khi xem bản dịch.";
+// ----------------------------------------------------
+// SENTENCE PREVIEW & ANALYSIS LOGIC
+// ----------------------------------------------------
+function splitIntoSentences(text) {
+  if (!text) return [];
+  // Split by chinese/vietnamese sentence delimiters while keeping them
+  const raw = text.split(/(?<=[。.！？!?\n])/gu);
+  return raw.map(s => s.trim()).filter(Boolean);
+}
+
+function updateSentencePreviewUi() {
+  const total = state.sentences.length;
+  if (total === 0) {
+    ui.sentencePositionInfo.textContent = "Câu 0 / 0";
+    ui.sentenceSourceBox.textContent = "Chưa có câu";
+    ui.sentenceTranslatedBox.textContent = "Chưa có câu";
+    ui.sentenceAnalysisList.textContent = "Chưa có dữ liệu phân tích câu.";
+    ui.prevSentenceBtn.disabled = true;
+    ui.nextSentenceBtn.disabled = true;
     return;
   }
-  ui.analysisCount.textContent = `${trace.length.toLocaleString("vi-VN")} mục${truncated ? "+" : ""}`;
-  if (!trace.length) {
-    ui.analysisList.textContent = "Chưa có dữ liệu phân tích cho khối này.";
+
+  state.currentSentenceIndex = Math.max(0, Math.min(state.currentSentenceIndex, total - 1));
+  const idx = state.currentSentenceIndex;
+  ui.sentencePositionInfo.textContent = `Câu ${idx + 1} / ${total}`;
+  ui.prevSentenceBtn.disabled = idx === 0;
+  ui.nextSentenceBtn.disabled = idx === total - 1;
+
+  const item = state.sentences[idx];
+  ui.sentenceSourceBox.textContent = item.source || "";
+  ui.sentenceTranslatedBox.textContent = item.translated || "";
+
+  // Render sentence analysis breakdown
+  ui.sentenceAnalysisList.innerHTML = "";
+  if (!item.trace || item.trace.length === 0) {
+    ui.sentenceAnalysisList.textContent = "Không có cụm từ phân tích riêng cho câu này.";
     return;
   }
+
   const table = document.createElement("div");
   table.className = "analysis-table";
-  for (const item of trace) {
+  for (const tr of item.trace) {
     const row = document.createElement("div");
     row.className = "analysis-row";
 
-    const kind = document.createElement("span");
-    kind.className = "analysis-kind";
-    kind.textContent = item.kind || "Từ điển";
-
     const source = document.createElement("span");
     source.className = "analysis-source";
-    source.textContent = item.source || "";
+    source.textContent = tr.source;
 
     const arrow = document.createElement("span");
     arrow.className = "analysis-arrow";
     arrow.textContent = "→";
 
-    const target = document.createElement("span");
-    target.className = "analysis-target";
-    target.textContent = item.target || "";
+    const targetWrap = document.createElement("span");
+    targetWrap.className = "analysis-target-wrap";
 
-    row.append(kind, source, arrow, target);
+    const currentTarget = document.createElement("strong");
+    currentTarget.className = "analysis-target";
+    currentTarget.textContent = tr.target;
+    targetWrap.appendChild(currentTarget);
+
+    const synonyms = (tr.allTargets || [tr.target]).filter((syn) => syn !== tr.target);
+    if (synonyms.length > 0) {
+      const synContainer = document.createElement("span");
+      synContainer.className = "synonym-container";
+      synContainer.textContent = " (Đồng nghĩa: ";
+
+      synonyms.forEach((syn, sIdx) => {
+        const synBtn = document.createElement("button");
+        synBtn.type = "button";
+        synBtn.className = "synonym-chip";
+        synBtn.textContent = syn;
+        synBtn.title = `Đổi "${tr.target}" thành "${syn}" trong bản dịch`;
+        synBtn.onclick = () => {
+          ui.findInput.value = tr.target;
+          ui.replaceInput.value = syn;
+          updateFindReplaceMatches();
+          ui.findInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        };
+        synContainer.appendChild(synBtn);
+        if (sIdx < synonyms.length - 1) {
+          synContainer.appendChild(document.createTextNode(" "));
+        }
+      });
+      synContainer.appendChild(document.createTextNode(")"));
+      targetWrap.appendChild(synContainer);
+    }
+
+    row.append(source, arrow, targetWrap);
     table.appendChild(row);
   }
-  ui.analysisList.appendChild(table);
-  if (truncated) {
-    const note = document.createElement("div");
-    note.className = "analysis-note";
-    note.textContent = `Chỉ hiển thị ${CONFIG.analysisLimit} mục đầu để trang không bị chậm.`;
-    ui.analysisList.appendChild(note);
-  }
+  ui.sentenceAnalysisList.appendChild(table);
 }
 
 async function showPreview(chunkIndex, storyId = state.metadata.activeStoryId) {
@@ -1636,7 +1769,8 @@ async function showPreview(chunkIndex, storyId = state.metadata.activeStoryId) {
     ui.previewPosition.textContent = "Chưa có dữ liệu";
     ui.sourceCount.textContent = "0 ký tự";
     ui.translatedCount.textContent = "0 ký tự";
-    renderAnalysis([]);
+    state.sentences = [];
+    updateSentencePreviewUi();
     return;
   }
   const safe = Math.max(0, Math.min(Number(chunkIndex) || 0, total - 1));
@@ -1649,6 +1783,7 @@ async function showPreview(chunkIndex, storyId = state.metadata.activeStoryId) {
   );
   let sourceText = source?.text || "";
   let translatedText = translated?.text || `[Khối ${safe + 1} chưa được dịch]`;
+
   if (sourceText.length > CONFIG.previewLimit)
     sourceText =
       sourceText.slice(0, CONFIG.previewLimit) + "\n[Đã giới hạn xem trước]";
@@ -1656,15 +1791,286 @@ async function showPreview(chunkIndex, storyId = state.metadata.activeStoryId) {
     translatedText =
       translatedText.slice(0, CONFIG.previewLimit) +
       "\n[Đã giới hạn xem trước]";
+
   ui.sourcePreview.value = sourceText;
   ui.translatedPreview.value = translatedText;
   ui.sourceCount.textContent = `${sourceText.length.toLocaleString("vi-VN")} ký tự`;
   ui.translatedCount.textContent = `${translatedText.length.toLocaleString("vi-VN")} ký tự`;
   ui.previewPosition.textContent = `${story.fileName} · Khối ${safe + 1} / ${total}`;
   ui.jumpChunk.value = safe + 1;
-  renderAnalysis(translated?.trace || [], !!translated?.traceTruncated);
+
+  // Build sentence preview structure
+  const srcSentences = splitIntoSentences(sourceText);
+  const transSentences = splitIntoSentences(translatedText);
+  const traceList = translated?.trace || [];
+
+  state.sentences = srcSentences.map((src, i) => {
+    const tr = transSentences[i] || "";
+    // Filter trace matching this sentence
+    const matchedTrace = traceList.filter(t => src.includes(t.source));
+    return { source: src, translated: tr, trace: matchedTrace };
+  });
+  state.currentSentenceIndex = 0;
+  updateSentencePreviewUi();
+  await updateUntranslatedAndQA();
 }
 
+// ----------------------------------------------------
+// EDIT TRANSLATION (SỬA BẢN DỊCH, UNDO, REMEMBER RULE)
+// ----------------------------------------------------
+function updateFindReplaceMatches() {
+  const findText = ui.findInput.value;
+  if (!findText) {
+    ui.findResultBox.style.display = "none";
+    return;
+  }
+
+  const currentText = ui.translatedPreview.value;
+  let count = 0;
+  if (currentText && findText) {
+    const parts = currentText.split(findText);
+    count = parts.length - 1;
+  }
+
+  ui.findResultBox.style.display = "block";
+  ui.findMatchCount.textContent = `Tìm thấy: ${count} lần (khối này)`;
+  ui.radioMatchCount.textContent = `(${count} lần trong khối)`;
+}
+
+async function performReplace() {
+  const findText = ui.findInput.value;
+  const replaceText = ui.replaceInput.value;
+  if (!findText) {
+    alert("Vui lòng nhập từ/cụm từ cần sửa.");
+    return;
+  }
+
+  const story = activeStory();
+  if (!story) return;
+
+  const scopeRadio = document.querySelector('input[name="replaceScope"]:checked');
+  const scope = scopeRadio ? scopeRadio.value : "all";
+  const remember = ui.rememberRuleCheck.checked;
+
+  // Save state for undo
+  const currentChunkData = await idbGet(CONFIG.stores.translated, storyChunkKey(story.id, state.previewChunk));
+  state.undoStack.push({
+    storyId: story.id,
+    chunkIndex: state.previewChunk,
+    scope,
+    previousText: currentChunkData ? currentChunkData.text : "",
+    findText,
+    replaceText,
+  });
+  ui.undoReplaceBtn.disabled = false;
+
+  if (scope === "single") {
+    // Only current preview chunk
+    if (currentChunkData && currentChunkData.text) {
+      currentChunkData.text = currentChunkData.text.split(findText).join(replaceText);
+      await idbPut(CONFIG.stores.translated, currentChunkData);
+      await showPreview(state.previewChunk, story.id);
+      log(`Đã thay "${findText}" → "${replaceText}" tại khối ${state.previewChunk + 1}.`);
+    }
+  } else {
+    // Entire story chunks translated so far
+    let replacedCount = 0;
+    for (let i = 0; i < story.currentChunk; i++) {
+      const chunkData = await idbGet(CONFIG.stores.translated, storyChunkKey(story.id, i));
+      if (chunkData && chunkData.text && chunkData.text.includes(findText)) {
+        const matches = chunkData.text.split(findText).length - 1;
+        replacedCount += matches;
+        chunkData.text = chunkData.text.split(findText).join(replaceText);
+        await idbPut(CONFIG.stores.translated, chunkData);
+      }
+    }
+    await showPreview(state.previewChunk, story.id);
+    log(`Đã thay tất cả ${replacedCount} lần "${findText}" → "${replaceText}" toàn bộ truyện.`);
+    setStatus(`Đã thay thế ${replacedCount} lần toàn bộ truyện.`, "success");
+  }
+
+  if (remember) {
+    const ruleRecord = {
+      id: makeId(),
+      findText,
+      replaceText,
+      createdAt: Date.now(),
+    };
+    state.customRules.push(ruleRecord);
+    await idbPut(CONFIG.stores.customRules, ruleRecord);
+    log(`Đã ghi nhớ quy tắc: "${findText}" → "${replaceText}".`);
+  }
+}
+
+async function performUndo() {
+  if (!state.undoStack.length) return;
+  const lastAction = state.undoStack.pop();
+  if (!state.undoStack.length) ui.undoReplaceBtn.disabled = true;
+
+  if (lastAction.scope === "single") {
+    const chunkData = await idbGet(CONFIG.stores.translated, storyChunkKey(lastAction.storyId, lastAction.chunkIndex));
+    if (chunkData) {
+      chunkData.text = lastAction.previousText;
+      await idbPut(CONFIG.stores.translated, chunkData);
+      await showPreview(lastAction.chunkIndex, lastAction.storyId);
+      log(`Đã hoàn tác thay thế tại khối ${lastAction.chunkIndex + 1}.`);
+    }
+  } else {
+    // Re-reverse replacement for whole story
+    const story = state.metadata.stories.find(s => s.id === lastAction.storyId);
+    if (story) {
+      for (let i = 0; i < story.currentChunk; i++) {
+        const chunkData = await idbGet(CONFIG.stores.translated, storyChunkKey(story.id, i));
+        if (chunkData && chunkData.text && chunkData.text.includes(lastAction.replaceText)) {
+          chunkData.text = chunkData.text.split(lastAction.replaceText).join(lastAction.findText);
+          await idbPut(CONFIG.stores.translated, chunkData);
+        }
+      }
+      await showPreview(state.previewChunk, story.id);
+      log(`Đã hoàn tác thay thế toàn bộ truyện.`);
+    }
+  }
+  setStatus("Đã hoàn tác thao tác thay thế.", "info");
+}
+
+// ----------------------------------------------------
+// UNTRANSLATED WORDS & QUALITY AUDIT (KIỂM TRA CHẤT LƯỢNG)
+// ----------------------------------------------------
+async function updateUntranslatedAndQA() {
+  const translatedText = ui.translatedPreview.value || "";
+  const sourceText = ui.sourcePreview.value || "";
+
+  // 1. Untranslated Chinese words count
+  const chineseMatches = sourceText.match(/[\p{Script=Han}]+/gu) || [];
+  const counts = {};
+  for (const w of chineseMatches) {
+    counts[w] = (counts[w] || 0) + 1;
+  }
+  const sorted = Object.keys(counts)
+    .map(w => ({ word: w, count: counts[w] }))
+    .sort((a, b) => b.count - a.count);
+
+  state.untranslatedStats = sorted;
+  ui.untranslatedList.innerHTML = "";
+  if (!sorted.length) {
+    ui.untranslatedList.textContent = "Không tìm thấy từ Trung Quốc chưa dịch trong khối này.";
+  } else {
+    for (const item of sorted.slice(0, 50)) {
+      const row = document.createElement("div");
+      row.className = "untranslated-item";
+      const wSpan = document.createElement("span");
+      wSpan.className = "untranslated-word";
+      wSpan.textContent = item.word;
+      const cSpan = document.createElement("span");
+      cSpan.className = "untranslated-count";
+      cSpan.textContent = `${item.count} lần`;
+      row.append(wSpan, cSpan);
+      ui.untranslatedList.appendChild(row);
+    }
+  }
+
+  // 2. QA Checks on translated block
+  const lines = translatedText.split("\n");
+  let chineseCount = 0;
+  let emptyCount = 0;
+  let abnormalCount = 0;
+  let longLineCount = 0;
+  const errorLines = [];
+
+  lines.forEach((line, i) => {
+    const trim = line.trim();
+    let hasErr = false;
+
+    if (!trim) {
+      emptyCount++;
+    }
+    const han = line.match(/[\p{Script=Han}]/gu);
+    if (han) {
+      chineseCount += han.length;
+      hasErr = true;
+    }
+    if (/[\uFFFD\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(line)) {
+      abnormalCount++;
+      hasErr = true;
+    }
+    if (line.length > 500) {
+      longLineCount++;
+      hasErr = true;
+    }
+    if (hasErr) errorLines.push(i);
+  });
+
+  state.qaIssues = {
+    chinese: chineseCount,
+    empty: emptyCount,
+    abnormal: abnormalCount,
+    longLine: longLineCount,
+    errorLines,
+    currentErrIndex: 0,
+  };
+
+  ui.qaChineseCount.textContent = chineseCount.toLocaleString("vi-VN");
+  ui.qaEmptyCount.textContent = emptyCount.toLocaleString("vi-VN");
+  ui.qaAbnormalCount.textContent = abnormalCount.toLocaleString("vi-VN");
+  ui.qaLongLineCount.textContent = longLineCount.toLocaleString("vi-VN");
+}
+
+function jumpToNextQAError() {
+  const issues = state.qaIssues;
+  if (!issues.errorLines || !issues.errorLines.length) {
+    alert("Không phát hiện lỗi trong khối bản dịch này!");
+    return;
+  }
+
+  const lineIndex = issues.errorLines[issues.currentErrIndex];
+  issues.currentErrIndex = (issues.currentErrIndex + 1) % issues.errorLines.length;
+
+  const textarea = ui.translatedPreview;
+  const lines = textarea.value.split("\n");
+  let charPos = 0;
+  for (let i = 0; i < lineIndex; i++) {
+    charPos += lines[i].length + 1;
+  }
+  textarea.focus();
+  textarea.setSelectionRange(charPos, charPos + lines[lineIndex].length);
+  log(`Đã nhảy tới dòng lỗi #${lineIndex + 1} trong bản dịch.`);
+}
+
+function exportUntranslatedList() {
+  if (!state.untranslatedStats.length) {
+    alert("Không có từ chưa dịch để xuất.");
+    return;
+  }
+  const content = state.untranslatedStats
+    .map(item => `${item.word}\t${item.count}`)
+    .join("\n");
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  downloadBlob(blob, "danh-sach-chua-dich.txt");
+  log("Đã xuất danh sách từ chưa dịch.");
+}
+
+async function addUntranslatedToVietPhrase() {
+  if (!state.untranslatedStats.length) {
+    alert("Không có từ chưa dịch để thêm.");
+    return;
+  }
+  const topWords = state.untranslatedStats.slice(0, 100);
+  const sampleLines = topWords.map(w => `${w.word}=${w.word}`).join("\n");
+  const content = prompt(
+    "Nhập/Sửa các từ cần thêm vào VietPhrase (định dạng: từ_gốc=nghĩa_dịch):",
+    sampleLines,
+  );
+  if (!content) return;
+
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const file = new File([blob], "VietPhrase_BoSung.txt", { type: "text/plain" });
+  await loadDictionaryFiles([file]);
+  setStatus("Đã bổ sung từ mới vào VietPhrase và nạp lại từ điển.", "success");
+}
+
+// ----------------------------------------------------
+// EXPORT LOGIC (ZIP / SINGLE / INDIVIDUAL)
+// ----------------------------------------------------
 async function buildStoryBlob(story) {
   const parts = [new Uint8Array([0xef, 0xbb, 0xbf])];
   for (let index = 0; index < story.currentChunk; index++) {
@@ -1691,29 +2097,55 @@ function downloadBlob(blob, fileName) {
 async function exportTranslated({ clearAfter = false } = {}) {
   const stories = selectedStories().filter((story) => story.currentChunk > 0);
   if (!stories.length) return;
+  const formatMode = ui.exportFormat.value || "zip";
+
   setStatus("Đang chuẩn bị các tệp xuất...", "info");
-  log(`Bắt đầu xuất ${stories.length} truyện đã chọn.`);
+  log(`Bắt đầu xuất ${stories.length} truyện đã chọn (Định dạng: ${formatMode}).`);
+
   try {
-    if ("showDirectoryPicker" in window) {
-      const directory = await window.showDirectoryPicker({
-        mode: "readwrite",
-      });
+    if (formatMode === "zip" && window.JSZip) {
+      const zip = new window.JSZip();
       for (const story of stories) {
-        const handle = await directory.getFileHandle(storyExportName(story), {
-          create: true,
-        });
-        const writable = await handle.createWritable();
-        await writable.write(await buildStoryBlob(story));
-        await writable.close();
+        const blob = await buildStoryBlob(story);
+        zip.file(storyExportName(story), blob);
       }
-    } else {
+      const content = await zip.generateAsync({ type: "blob" });
+      downloadBlob(content, "danh-sach-truyen-dich.zip");
+    } else if (formatMode === "single") {
+      // Concatenate all stories into single file
+      const parts = [new Uint8Array([0xef, 0xbb, 0xbf])];
       for (const story of stories) {
-        downloadBlob(await buildStoryBlob(story), storyExportName(story));
-        await new Promise((resolve) => setTimeout(resolve, 250));
+        const blob = await buildStoryBlob(story);
+        parts.push(await blob.text());
+        parts.push("\n\n========================================\n\n");
+      }
+      const mergedBlob = new Blob(parts, { type: "text/plain;charset=utf-8" });
+      downloadBlob(mergedBlob, safeFileName(ui.exportName.value));
+    } else {
+      // Individual files
+      if ("showDirectoryPicker" in window) {
+        const directory = await window.showDirectoryPicker({
+          mode: "readwrite",
+        });
+        for (const story of stories) {
+          const handle = await directory.getFileHandle(storyExportName(story), {
+            create: true,
+          });
+          const writable = await handle.createWritable();
+          await writable.write(await buildStoryBlob(story));
+          await writable.close();
+        }
+      } else {
+        for (const story of stories) {
+          downloadBlob(await buildStoryBlob(story), storyExportName(story));
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
       }
     }
-    setStatus("Đã xuất các tệp TXT riêng thành công.", "success");
-    log(`Đã xuất ${stories.length} tệp TXT riêng.`);
+
+    setStatus("Đã xuất tệp bản dịch thành công.", "success");
+    log(`Đã xuất ${stories.length} bản dịch.`);
+
     if (clearAfter) {
       for (const story of stories) {
         await deleteStoryChunks(story.id);
@@ -1780,16 +2212,19 @@ async function deleteAllData(ask = true) {
     idbClear(CONFIG.stores.source),
     idbClear(CONFIG.stores.translated),
     idbClear(CONFIG.stores.dictionaries),
+    idbClear(CONFIG.stores.customRules),
   ]);
   state.metadata = createEmptyMetadata();
   state.dictionaries = [];
+  state.customRules = [];
   state.previewChunk = 0;
   ui.sourcePreview.value = "";
   ui.translatedPreview.value = "";
   ui.sourceCount.textContent = "0 ký tự";
   ui.translatedCount.textContent = "0 ký tự";
   ui.previewPosition.textContent = "Chưa có dữ liệu";
-  renderAnalysis([]);
+  state.sentences = [];
+  updateSentencePreviewUi();
   refreshUi();
   setStatus("Đã xóa toàn bộ dữ liệu lưu trong trình duyệt.", "success");
   log("Đã xóa toàn bộ dữ liệu.");
@@ -1849,6 +2284,11 @@ function bindEvents() {
       await exportTranslated({ clearAfter: true });
     }
   });
+  ui.exportFormat.addEventListener("change", () => {
+    ui.exportNameContainer.style.display =
+      ui.exportFormat.value === "single" ? "block" : "none";
+  });
+
   ui.deleteAllButton.addEventListener("click", () => deleteAllData(true));
   ui.exportName.addEventListener("input", () => {
     ui.exportName.dataset.edited = "1";
@@ -1865,6 +2305,31 @@ function bindEvents() {
   ui.nextButton.addEventListener("click", () =>
     showPreview(state.previewChunk + 1),
   );
+
+  // New Events for Edit Replace
+  ui.findInput.addEventListener("input", updateFindReplaceMatches);
+  ui.doReplaceBtn.addEventListener("click", performReplace);
+  ui.undoReplaceBtn.addEventListener("click", performUndo);
+
+  // New Events for Sentence Navigation
+  ui.prevSentenceBtn.addEventListener("click", () => {
+    if (state.currentSentenceIndex > 0) {
+      state.currentSentenceIndex--;
+      updateSentencePreviewUi();
+    }
+  });
+  ui.nextSentenceBtn.addEventListener("click", () => {
+    if (state.currentSentenceIndex < state.sentences.length - 1) {
+      state.currentSentenceIndex++;
+      updateSentencePreviewUi();
+    }
+  });
+
+  // Untranslated & QA events
+  ui.exportUntranslatedBtn.addEventListener("click", exportUntranslatedList);
+  ui.addToVietphraseBtn.addEventListener("click", addUntranslatedToVietPhrase);
+  ui.nextErrorBtn.addEventListener("click", jumpToNextQAError);
+
   ui.clearLogButton.addEventListener("click", () => {
     ui.logBox.textContent = "";
   });
@@ -1877,8 +2342,7 @@ async function initialize() {
     bindEvents();
     await restoreMetadata();
     await restoreDictionaries();
-    const compacted = await compactStoredAnalysis();
-    if (compacted) log(`Đã dọn dữ liệu phân tích cũ khỏi ${compacted} khối dịch.`);
+    await restoreCustomRules();
     refreshUi();
     await updateStorage();
     if (state.metadata.stories.length) {
@@ -1896,7 +2360,7 @@ async function initialize() {
     } else {
       setStatus("Chọn truyện và các từ điển để bắt đầu.", "info");
     }
-    log("Ứng dụng đã khởi động.");
+    log("Ứng dụng dịch truyện đã khởi động.");
   } catch (error) {
     setStatus(`Không thể khởi động ứng dụng: ${error.message}`, "error");
     console.error(error);
